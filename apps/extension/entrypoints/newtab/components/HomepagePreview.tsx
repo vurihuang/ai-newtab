@@ -25,7 +25,14 @@ export function HomepagePreview({ code }: { code: string }) {
   return (
     <SandpackProvider files={files} template="react" options={{ autorun: true }}>
       <SandpackLayout style={{ height: "100vh", width: "100vw" }}>
-        <SandpackPreview style={{ height: "100%" }} />
+        {/* The preview's own toolbar is hidden: a new tab has nothing to reload
+            or to open in CodeSandbox, and it covered the rendered homepage. */}
+        <SandpackPreview
+          style={{ height: "100%" }}
+          showOpenInCodeSandbox={false}
+          showRefreshButton={false}
+          showRestartButton={false}
+        />
       </SandpackLayout>
     </SandpackProvider>
   );
