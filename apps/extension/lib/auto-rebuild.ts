@@ -1,19 +1,13 @@
 /**
  * Auto-rebuild policy, evaluated by the worker's alarm heartbeat: once the
- * current homepage is older than the chosen interval, rebuild headlessly so the
+ * current homepage is older than the chosen schedule, rebuild headlessly so the
  * next new tab already shows a fresh one.
+ *
+ * Scheduling grammar and due-time math live in `schedule.ts`.
  */
+import { DEFAULT_REBUILD_INTERVAL_HOURS, isDue, type Schedule } from "./schedule";
 
-/** Interval choices offered in Settings, in hours. */
-export const REBUILD_INTERVAL_CHOICES = [6, 12, 24, 48] as const;
-
-export const DEFAULT_REBUILD_INTERVAL_HOURS = 12;
-
-/** A stored/user value as ms, falling back to the default when unset or invalid. */
-export function rebuildIntervalMs(hours?: number | null): number {
-  const h = typeof hours === "number" && hours > 0 ? hours : DEFAULT_REBUILD_INTERVAL_HOURS;
-  return h * 60 * 60 * 1000;
-}
+export { DEFAULT_REBUILD_INTERVAL_HOURS, PRESET_SCHEDULES, describeSchedule, parseSchedule, type Schedule } from "./schedule";
 
 export interface AutoRebuildInput {
   enabled: boolean;
@@ -23,7 +17,7 @@ export interface AutoRebuildInput {
   lastBuildTimestamp?: string | null;
   /** ISO timestamp of the last auto-build attempt, if any. */
   lastAutoAttemptTimestamp?: string | null;
-  intervalMs: number;
+  schedule: Schedule;
   now: Date;
 }
 
@@ -31,17 +25,15 @@ export interface AutoRebuildInput {
  * Conservative by design:
  * - Never fires before the first manual build, so nothing spends on the API
  *   before the user has engaged.
- * - Won't retry a failed or cancelled auto-build until another full interval
- *   has passed, so it can't loop. The user can always rebuild by hand.
+ * - A schedule's boundary counts once: an attempt at or after it doesn't repeat
+ *   until the next one, so a failure can't loop.
  */
 export function shouldAutoRebuild(input: AutoRebuildInput): boolean {
-  const { enabled, hasApiKey, isRunning, lastBuildTimestamp, lastAutoAttemptTimestamp, intervalMs, now } =
-    input;
-
+  const { enabled, hasApiKey, isRunning, lastBuildTimestamp, lastAutoAttemptTimestamp, schedule, now } = input;
   if (!enabled || !hasApiKey || isRunning || !lastBuildTimestamp) return false;
-
-  const age = (iso: string) => now.getTime() - new Date(iso).getTime();
-  if (age(lastBuildTimestamp) < intervalMs) return false;
-  if (lastAutoAttemptTimestamp && age(lastAutoAttemptTimestamp) < intervalMs) return false;
-  return true;
+  const lastBuild = new Date(lastBuildTimestamp);
+  const lastAttempt = lastAutoAttemptTimestamp ? new Date(lastAutoAttemptTimestamp) : null;
+  if (Number.isNaN(lastBuild.getTime())) return false;
+  if (lastAttempt && Number.isNaN(lastAttempt.getTime())) return false;
+  return isDue(schedule, lastBuild, lastAttempt, now);
 }

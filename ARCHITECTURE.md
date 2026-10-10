@@ -121,7 +121,8 @@ apps/extension/           MV3 extension (WXT + React)
     history.ts            getHistory: group and rank chrome.history by domain
     scraper.ts            getPageHtml: load URLs in a background window, sanitize HTML
     protocol.ts           page ↔ worker messages and the five UI build steps
-    auto-rebuild.ts       when to rebuild on a schedule
+    auto-rebuild.ts       when to rebuild: the policy and the Settings presets
+    schedule.ts           duration/cron grammar, next-run math, human preview
     storage.ts            every chrome.storage key, settings, saved homepage
     transpile.ts          TSX → JS for the preview
 

@@ -8,6 +8,7 @@ import {
   STORAGE_KEYS as AGENT_KEYS,
   type KVStore,
 } from "@homepage/agent-core";
+import { DEFAULT_REBUILD_INTERVAL_HOURS } from "./schedule";
 
 /**
  * Everything the extension persists, in one place. All of it lives in
@@ -28,6 +29,9 @@ export const KEYS = {
   autoRebuild: "autoRebuild",
   /** ISO timestamp of the last auto-build *attempted* (success or not). */
   lastAutoBuildAttempt: "lastAutoBuildAttempt",
+  /** Duration (`12h`) or cron expression for the scheduled rebuild. */
+  rebuildSchedule: "rebuildSchedule",
+  /** Legacy hours-based value, migrated into `rebuildSchedule` on read. */
   rebuildIntervalHours: "autoRebuildIntervalHours",
   /** Throttled mirror of the live build state, for tabs that open while the worker sleeps. */
   buildSnapshot: "buildSnapshot",
@@ -53,7 +57,8 @@ export interface Settings extends ConnectionSettings {
   blockedSites: string[];
   /** Unset means on — auto-rebuild is opt-out. */
   autoRebuild: boolean;
-  rebuildIntervalHours: number | null;
+  /** Duration or cron expression; defaults to every 12 hours. */
+  rebuildSchedule: string;
 }
 
 /** The `KVStore` agent-core persists its agent/environment/session IDs through. */
@@ -80,6 +85,7 @@ export async function loadSettings(): Promise<Settings> {
     KEYS.baseUrl,
     KEYS.connectionConfigured,
     KEYS.autoRebuild,
+    KEYS.rebuildSchedule,
     KEYS.rebuildIntervalHours,
   ]);
   const model = s[KEYS.model] as string | undefined;
@@ -97,11 +103,12 @@ export async function loadSettings(): Promise<Settings> {
       ? model?.trim() || DEFAULT_GATEWAY_MODEL
       : MODEL_CHOICES.find((m) => m.id === model)?.id ?? DEFAULT_MODEL,
     autoRebuild: s[KEYS.autoRebuild] !== false,
-    rebuildIntervalHours: (s[KEYS.rebuildIntervalHours] as number | undefined) ?? null,
+    rebuildSchedule: (s[KEYS.rebuildSchedule] as string | undefined) ??
+      ((s[KEYS.rebuildIntervalHours] as number | undefined) ? `${s[KEYS.rebuildIntervalHours]}h` : `${DEFAULT_REBUILD_INTERVAL_HOURS}h`),
   };
 }
 
-export async function saveSetting<K extends "apiKey" | "systemPrompt" | "blockedSites" | "model" | "autoRebuild" | "rebuildIntervalHours">(
+export async function saveSetting<K extends "apiKey" | "systemPrompt" | "blockedSites" | "model" | "autoRebuild" | "rebuildSchedule">(
   key: K,
   value: Settings[K],
 ): Promise<void> {

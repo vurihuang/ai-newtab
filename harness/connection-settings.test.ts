@@ -31,6 +31,15 @@ test("existing Anthropic credentials do not get routed to Magpie", async () => {
   expect(await loadSettings()).toMatchObject({ provider: "anthropic", model: DEFAULT_MODEL, connectionConfigured: true });
 });
 
+test("rebuild schedule defaults to 12h and migrates legacy hour values", async () => {
+  storage();
+  expect((await loadSettings()).rebuildSchedule).toBe("12h");
+  storage({ autoRebuildIntervalHours: 24 });
+  expect((await loadSettings()).rebuildSchedule).toBe("24h");
+  storage({ rebuildSchedule: "0 9 * * mon", autoRebuildIntervalHours: 6 });
+  expect((await loadSettings()).rebuildSchedule).toBe("0 9 * * mon");
+});
+
 test("custom model IDs and optional credentials survive saving and reload", async () => {
   const { writes } = storage();
   await saveConnection({ provider: "openai", baseUrl: "http://localhost:3425/v1/", apiKey: "", model: " my/custom-model " });

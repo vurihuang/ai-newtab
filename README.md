@@ -90,6 +90,10 @@ over the agent's own defaults. This box sets both the content and the look:
 | *"Green-on-black terminal, monospace, like a 1980s BBS."* | Exactly that |
 | *"Skip sports and politics. Always show the weather and my next three calendar events."* | Your rules, every day |
 
+**Rebuild schedule.** Type a duration (`15m`, `1h`, `2d`) or a five-field cron
+expression (`0 9 * * *`). The field previews when the next rebuild is due and
+flags a value it cannot parse.
+
 Click **Save & rebuild** to apply them right away.
 
 **Sites the agent never reads.** Enter one host per line; subdomains are included,
@@ -107,9 +111,18 @@ original connection. Switching providers clears the key field so you can enter
 the credential for the new provider. Anthropic mode retains its Claude model picker.
 
 **Rebuild automatically.** On by default. Once your homepage is older than the
-interval you pick (6, 12, 24 or 48 hours), the extension rebuilds it quietly in the
-background. It only starts after you've built once by hand, and it won't retry a
-failed build until the next interval, so it never loops.
+schedule you set, the extension rebuilds it quietly in the background. Pick a
+preset or type your own:
+
+- **Duration:** `15m`, `1h`, `2d`, `1w`, or a bare number of hours (`12`).
+- **Cron:** five fields at minute resolution — `0 9 * * *` (daily at 09:00),
+  `0 9 * * mon` (Mondays), `*/30 8-18 * * *` (every 30 minutes while you work).
+  `*`, ranges, lists, steps and three-letter names are accepted.
+- **Off:** `off` disables the schedule; the field shows when the next run is due.
+
+It only starts after you've built once by hand, and a failed build retries at
+the next scheduled time rather than in a loop, so it never loops. Durations are
+measured from your last build; a cron boundary counts once.
 
 **↻ Rebuild** in the top-right corner rebuilds right away.
 

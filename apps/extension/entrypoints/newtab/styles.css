@@ -263,3 +263,370 @@ body {
     animation: none;
   }
 }
+
+/* ---- Settings dialog ---- */
+.settings-overlay {
+  --s-ink: #171b23;
+  --s-muted: #5c6472;
+  --s-faint: #8a92a1;
+  --s-border: #e2e6ee;
+  --s-surface: #fff;
+  --s-panel: #f6f8fb;
+  --s-accent: #0066cc;
+  --s-danger: #a02620;
+
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(16, 20, 28, 0.45);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--s-ink);
+}
+
+.settings-modal {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 620px;
+  max-height: min(88vh, 880px);
+  background: var(--s-surface);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(10, 14, 22, 0.28);
+  overflow: hidden;
+}
+.settings-modal:focus-visible {
+  outline: 2px solid var(--s-accent);
+  outline-offset: 2px;
+}
+
+/* Header and footer stay put; only the form body scrolls. */
+.settings-header {
+  flex: 0 0 auto;
+  padding: 22px 26px 18px;
+  border-bottom: 1px solid var(--s-border);
+}
+.settings-header h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.settings-header p {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  color: var(--s-muted);
+}
+
+.settings-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 26px 22px;
+}
+
+.settings-section {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--s-border);
+}
+.settings-section:last-child {
+  border-bottom: none;
+  padding-bottom: 4px;
+}
+.settings-section-title {
+  display: block;
+  float: none;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--s-ink);
+}
+.settings-help {
+  display: block;
+  margin: 4px 0 10px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--s-muted);
+}
+.settings-help code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11.5px;
+  background: var(--s-panel);
+  border: 1px solid var(--s-border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.settings-textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 13px;
+  font-size: 13.5px;
+  font-family: inherit;
+  line-height: 1.6;
+  color: var(--s-ink);
+  background: var(--s-surface);
+  border: 1px solid var(--s-border);
+  border-radius: 10px;
+  resize: vertical;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.settings-textarea-tall {
+  min-height: 132px;
+}
+.settings-textarea-list {
+  min-height: 132px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12.5px;
+}
+.settings-textarea::placeholder {
+  color: var(--s-faint);
+}
+
+/* ---- Shared form fields (settings dialog and connection setup) ---- */
+.fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.field {
+  display: block;
+  margin-top: 14px;
+}
+.field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--s-ink, #171b23);
+  margin-bottom: 6px;
+}
+.field-help {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--s-muted, #5c6472);
+}
+.field-row {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+.field-row > input,
+.field-row > select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.field-status {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: #1f7a52;
+}
+.field-status-error {
+  color: #a02620;
+}
+
+.settings-textarea:focus-visible,
+.field input:focus-visible,
+.field select:focus-visible,
+.settings-schedule-input:focus-visible,
+.settings-inline select:focus-visible {
+  outline: none;
+  border-color: var(--s-accent, #0066cc);
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.16);
+}
+.field input,
+.field select {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  font-family: inherit;
+  color: var(--s-ink, #171b23);
+  background: var(--s-surface, #fff);
+  border: 1px solid var(--s-border, #e2e6ee);
+  border-radius: 10px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.field input::placeholder {
+  color: var(--s-faint, #8a92a1);
+}
+.field input[type="password"] {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.settings-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.settings-toggle input[type="checkbox"] {
+  margin: 2px 0 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--s-accent);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.settings-toggle-text {
+  font-weight: 550;
+}
+.settings-toggle-text .settings-help {
+  margin: 3px 0 0;
+  font-weight: 400;
+}
+
+.settings-inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-top: 12px;
+  font-size: 13.5px;
+}
+.settings-inline[data-disabled="true"] {
+  opacity: 0.5;
+}
+.settings-schedule-input {
+  flex: 1 1 140px;
+  min-width: 110px;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+  color: var(--s-ink);
+  background: var(--s-surface);
+  border: 1px solid var(--s-border);
+  border-radius: 10px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.settings-schedule-input[aria-invalid="true"] {
+  border-color: var(--s-danger);
+}
+.settings-schedule-preview {
+  flex: 1 1 100%;
+  font-size: 12.5px;
+  color: var(--s-muted);
+}
+.settings-schedule-input[aria-invalid="true"] ~ .settings-schedule-preview {
+  color: var(--s-danger);
+}
+
+/* ---- Buttons ---- */
+.hb-btn {
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.hb-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.hb-btn:focus-visible {
+  outline: 2px solid var(--s-accent, #0066cc);
+  outline-offset: 2px;
+}
+.hb-btn-primary {
+  background: var(--s-accent, #0066cc);
+  color: #fff;
+}
+.hb-btn-primary:hover:not(:disabled) {
+  background: #0057ad;
+}
+.hb-btn-ghost {
+  background: transparent;
+  border-color: var(--s-border, #e2e6ee);
+  color: var(--s-ink, #171b23);
+}
+.hb-btn-ghost:hover:not(:disabled) {
+  border-color: #c8cfdb;
+  background: var(--s-panel, #f6f8fb);
+}
+
+.settings-footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 26px;
+  border-top: 1px solid var(--s-border);
+  background: var(--s-panel);
+}
+.settings-footer-status {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.settings-footer-status .settings-help {
+  margin: 0;
+}
+.settings-error {
+  display: block;
+  font-size: 12.5px;
+  color: var(--s-danger);
+}
+
+@media (max-width: 640px) {
+  .settings-overlay {
+    padding: 0;
+  }
+  .settings-modal {
+    max-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
+  }
+  .settings-footer {
+    flex-wrap: wrap;
+  }
+  .settings-footer-status {
+    flex: 1 1 100%;
+  }
+}
+
+/* First-run connection screen: same form language, no overlay. */
+.setup-screen {
+  --s-ink: #171b23;
+  --s-muted: #5c6472;
+  --s-faint: #8a92a1;
+  --s-border: #e2e6ee;
+  --s-surface: #fff;
+  --s-panel: #f6f8fb;
+  --s-accent: #0066cc;
+  --s-danger: #a02620;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--s-ink);
+  background: var(--s-panel);
+}
+@media (max-width: 640px) {
+  .setup-screen {
+    padding: 0;
+  }
+  .setup-screen .settings-modal {
+    max-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
+  }
+}

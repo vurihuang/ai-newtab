@@ -20,7 +20,7 @@ export default function App() {
   const [systemPrompt, setSystemPrompt] = useState("");
   const [blockedSites, setBlockedSites] = useState<string[]>(DEFAULT_BLOCKED_SITES);
   const [autoRebuild, setAutoRebuild] = useState(true);
-  const [intervalHours, setIntervalHours] = useState(DEFAULT_REBUILD_INTERVAL_HOURS);
+  const [rebuildSchedule, setRebuildSchedule] = useState(`${DEFAULT_REBUILD_INTERVAL_HOURS}h`);
   /** Transpiled homepage, ready for Sandpack. */
   const [renderedCode, setRenderedCode] = useState<string | null>(null);
   /** A session left mid-flight, offered as "Resume interrupted build". */
@@ -53,7 +53,7 @@ export default function App() {
         setSystemPrompt(settings.systemPrompt);
         setBlockedSites(settings.blockedSites);
         setAutoRebuild(settings.autoRebuild);
-        setIntervalHours(settings.rebuildIntervalHours ?? DEFAULT_REBUILD_INTERVAL_HOURS);
+        setRebuildSchedule(settings.rebuildSchedule);
         setResumable(settings.provider === "anthropic" ? activeSession ?? null : null);
         if (homepage?.code) setRenderedCode(toRenderable(homepage.code));
       } finally {
@@ -85,9 +85,9 @@ export default function App() {
     setAutoRebuild(next);
     await saveSetting("autoRebuild", next);
   }, []);
-  const changeInterval = useCallback(async (next: number) => {
-    setIntervalHours(next);
-    await saveSetting("rebuildIntervalHours", next);
+  const changeSchedule = useCallback(async (next: string) => {
+    setRebuildSchedule(next);
+    await saveSetting("rebuildSchedule", next);
   }, []);
 
   if (loading) return <div style={{ padding: 20, textAlign: "center" }}>Loading…</div>;
@@ -100,8 +100,8 @@ export default function App() {
       connection={connection}
       autoRebuild={autoRebuild}
       onToggleAutoRebuild={toggleAutoRebuild}
-      intervalHours={intervalHours}
-      onChangeInterval={changeInterval}
+      rebuildSchedule={rebuildSchedule}
+      onChangeSchedule={changeSchedule}
       onClose={() => setShowSettings(false)}
       onSave={savePrompt}
     />

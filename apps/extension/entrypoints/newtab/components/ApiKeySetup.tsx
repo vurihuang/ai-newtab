@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { validateConnection, type ConnectionSettings } from "@/lib/storage";
 import { ConnectionFields } from "./ConnectionFields";
-import { btn, errorBox } from "./ui";
 
 export function ApiKeySetup({ initialConnection, onSave }: {
   initialConnection: ConnectionSettings;
@@ -18,16 +17,26 @@ export function ApiKeySetup({ initialConnection, onSave }: {
     finally { setSaving(false); }
   };
   return (
-    <div style={{ maxWidth: 560, margin: "8vh auto", padding: 24, fontFamily: "system-ui" }}>
-      <h1 style={{ fontSize: 24 }}>Connect your model</h1>
-      <p style={{ color: "#555", lineHeight: 1.6 }}>
-        Use Magpie or another OpenAI-compatible API to build your homepage. No Anthropic key is needed in gateway mode.
-      </p>
-      <ConnectionFields value={connection} onChange={setConnection} />
-      {error && <p role="alert" style={errorBox}>{error}</p>}
-      <button style={{ ...btn, marginTop: 16 }} disabled={saving} onClick={() => void save()}>
-        {saving ? "Saving…" : "Save connection"}
-      </button>
+    <div className="setup-screen">
+      <div className="settings-modal" style={{ maxWidth: 560 }}>
+        <header className="settings-header">
+          <h2>Connect your model</h2>
+          <p>Use Magpie or another OpenAI-compatible API to build your homepage. No Anthropic key is needed in gateway mode.</p>
+        </header>
+        <div className="settings-body">
+          <section className="settings-section" style={{ borderBottom: "none" }}>
+            <ConnectionFields value={connection} onChange={setConnection} />
+          </section>
+        </div>
+        <footer className="settings-footer">
+          <div className="settings-footer-status">
+            {error && <span className="settings-error" role="alert">{error}</span>}
+          </div>
+          <button className="hb-btn hb-btn-primary" disabled={saving} onClick={() => void save()}>
+            {saving ? "Saving…" : "Save connection"}
+          </button>
+        </footer>
+      </div>
     </div>
   );
 }

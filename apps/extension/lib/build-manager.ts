@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { runHomepageBuild, runGatewayBuild, type HomepageModel, type RunCallbacks, type RunPhase } from "@homepage/agent-core";
-import { rebuildIntervalMs, shouldAutoRebuild } from "./auto-rebuild";
+import { parseSchedule, shouldAutoRebuild } from "./auto-rebuild";
 import { browserBridge } from "./browser-bridge";
 import {
   INITIAL_BUILD_STATE,
@@ -140,7 +140,7 @@ export class BuildManager {
         isRunning: this.running,
         lastBuildTimestamp: homepage?.timestamp,
         lastAutoAttemptTimestamp: lastAttempt,
-        intervalMs: rebuildIntervalMs(settings.rebuildIntervalHours),
+        schedule: parseSchedule(settings.rebuildSchedule),
         now,
       })
     ) {

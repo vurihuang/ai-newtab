@@ -273,6 +273,42 @@ try {
     return s.provider === 'openai' && s.model === 'fixture/custom' && s.apiKey === 'fixture-key' && s.connectionConfigured === true;
   })()`);
   check("custom gateway connection persists before the first build", settingsSaved);
+
+  // ---- settings dialog: sticky actions and a custom rebuild schedule --------
+  await click("⚙️ Settings");
+  await waitUntil("document.body.innerText.includes('Customize your homepage')");
+  const dialogLayout = await page.evaluate<any>(`(() => {
+    const list = ['.settings-body', '.settings-header', '.settings-footer'];
+    const layout = Object.fromEntries(list.map(selector => {
+      const element = document.querySelector(selector);
+      if (!element) return [selector, null];
+      const rect = element.getBoundingClientRect();
+      return [selector, { top: Math.round(rect.top), bottom: Math.round(rect.bottom), height: Math.round(rect.height), scrolls: element.scrollHeight > element.clientHeight + 1 }];
+    }));
+    return { ...layout, viewportHeight: window.innerHeight };
+  })()`);
+  check(
+    "settings actions stay visible inside the viewport",
+    Boolean(dialogLayout[".settings-footer"]) && dialogLayout[".settings-footer"].bottom <= dialogLayout.viewportHeight + 12 &&
+      dialogLayout[".settings-header"].top >= 0,
+    JSON.stringify(dialogLayout),
+  );
+  check("only the settings body scrolls", dialogLayout[".settings-body"].scrolls === true, JSON.stringify(dialogLayout[".settings-body"]));
+  await fill("Rebuild every", "15m");
+  await waitUntil("document.querySelector('.settings-schedule-preview')?.textContent?.includes('15 minutes')");
+  const scheduleValid = await page.evaluate<boolean>("document.querySelector('.settings-schedule-input')?.getAttribute('aria-invalid') === 'false'");
+  check("a custom duration shows its next run", scheduleValid);
+  await fill("Rebuild every", "0 9 * * mon");
+  await waitUntil("document.querySelector('.settings-schedule-preview')?.textContent?.includes('next')");
+  await fill("Rebuild every", "not a schedule");
+  await waitUntil("document.querySelector('.settings-schedule-input')?.getAttribute('aria-invalid') === 'true'");
+  check("an invalid schedule is flagged instead of silently accepted", true);
+  await fill("Rebuild every", "1h");
+  await waitUntil("document.querySelector('.settings-schedule-input')?.getAttribute('aria-invalid') === 'false'");
+  await click("Save");
+  await waitUntil("!document.body.innerText.includes('Customize your homepage')");
+  const savedSchedule = await page.evaluate<any>("chrome.storage.local.get('rebuildSchedule')");
+  check("the custom schedule persists", savedSchedule.rebuildSchedule === "1h", savedSchedule.rebuildSchedule);
   await page.evaluate(`(async () => {
     await chrome.storage.local.set({ autoRebuild: false });
     await chrome.history.addUrl({url: 'http://news.example.com:${fixture.port}/'});
