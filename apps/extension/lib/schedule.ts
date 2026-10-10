@@ -25,6 +25,8 @@ const MINUTE_MS = 60_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const DEFAULT_REBUILD_INTERVAL_HOURS = 12;
+/** What a fresh install uses, and what an emptied field falls back to. */
+export const DEFAULT_REBUILD_SCHEDULE = `${DEFAULT_REBUILD_INTERVAL_HOURS}h`;
 export const PRESET_SCHEDULES: { value: string; label: string }[] = [
   { value: "6h", label: "Every 6 hours" },
   { value: "12h", label: "Every 12 hours" },

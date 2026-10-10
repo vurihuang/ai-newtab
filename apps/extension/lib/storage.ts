@@ -5,7 +5,7 @@ import {
   normalizeGatewayUrl,
   type KVStore,
 } from "@homepage/agent-core";
-import { DEFAULT_REBUILD_INTERVAL_HOURS } from "./schedule";
+import { DEFAULT_REBUILD_SCHEDULE } from "./schedule";
 
 /**
  * Everything the extension persists, in one place. All of it lives in
@@ -92,8 +92,10 @@ export async function loadSettings(): Promise<Settings> {
     blockedSites: (s[KEYS.blockedSites] as string[] | undefined) ?? [...DEFAULT_BLOCKED_SITES],
     model: (s[KEYS.model] as string | undefined)?.trim() || DEFAULT_GATEWAY_MODEL,
     autoRebuild: s[KEYS.autoRebuild] !== false,
-    rebuildSchedule: (s[KEYS.rebuildSchedule] as string | undefined) ??
-      ((s[KEYS.rebuildIntervalHours] as number | undefined) ? `${s[KEYS.rebuildIntervalHours]}h` : `${DEFAULT_REBUILD_INTERVAL_HOURS}h`),
+    // An empty value falls back to the default instead of silently disabling the
+    // schedule: `off` is the explicit way to turn it off.
+    rebuildSchedule: (s[KEYS.rebuildSchedule] as string | undefined)?.trim() ||
+      ((s[KEYS.rebuildIntervalHours] as number | undefined) ? `${s[KEYS.rebuildIntervalHours]}h` : DEFAULT_REBUILD_SCHEDULE),
   };
 }
 

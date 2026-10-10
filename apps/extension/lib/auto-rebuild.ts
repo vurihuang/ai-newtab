@@ -7,7 +7,7 @@
  */
 import { DEFAULT_REBUILD_INTERVAL_HOURS, isDue, type Schedule } from "./schedule";
 
-export { DEFAULT_REBUILD_INTERVAL_HOURS, PRESET_SCHEDULES, describeSchedule, isOffText, parseSchedule, type Schedule } from "./schedule";
+export { DEFAULT_REBUILD_INTERVAL_HOURS, DEFAULT_REBUILD_SCHEDULE, PRESET_SCHEDULES, describeSchedule, isOffText, parseSchedule, type Schedule } from "./schedule";
 
 export interface AutoRebuildInput {
   enabled: boolean;

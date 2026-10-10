@@ -60,3 +60,11 @@ test("rebuild schedule defaults to 12h and migrates legacy hour values", async (
   storage({ rebuildSchedule: "0 9 * * mon", autoRebuildIntervalHours: 6 });
   expect((await loadSettings()).rebuildSchedule).toBe("0 9 * * mon");
 });
+
+test("an emptied schedule field falls back to the default instead of turning the schedule off", async () => {
+  // A blank value used to read as `off` while the checkbox still said the opposite.
+  storage({ rebuildSchedule: "   ", autoRebuildIntervalHours: 24 });
+  expect((await loadSettings()).rebuildSchedule).toBe("24h");
+  storage({ rebuildSchedule: "" });
+  expect((await loadSettings()).rebuildSchedule).toBe("12h");
+});

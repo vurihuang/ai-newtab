@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { DEFAULT_GATEWAY_MODEL, DEFAULT_GATEWAY_URL, DEFAULT_BLOCKED_SITES } from "@homepage/agent-core";
-import { DEFAULT_REBUILD_INTERVAL_HOURS } from "@/lib/auto-rebuild";
+import { DEFAULT_REBUILD_SCHEDULE } from "@/lib/auto-rebuild";
 import { BUILD_STEPS } from "@/lib/protocol";
 import { KEYS, extensionStore, loadHomepage, loadSettings, saveConnection, saveSetting, type ConnectionSettings } from "@/lib/storage";
 import { toRenderable } from "@/lib/transpile";
@@ -20,7 +20,7 @@ export default function App() {
   const [systemPrompt, setSystemPrompt] = useState("");
   const [blockedSites, setBlockedSites] = useState<string[]>(DEFAULT_BLOCKED_SITES);
   const [autoRebuild, setAutoRebuild] = useState(true);
-  const [rebuildSchedule, setRebuildSchedule] = useState(`${DEFAULT_REBUILD_INTERVAL_HOURS}h`);
+  const [rebuildSchedule, setRebuildSchedule] = useState(DEFAULT_REBUILD_SCHEDULE);
   /** Transpiled homepage, ready for Sandpack. */
   const [renderedCode, setRenderedCode] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
