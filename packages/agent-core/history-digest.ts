@@ -1,4 +1,4 @@
-import { DEFAULTS } from "./schemas";
+import { DEFAULTS } from "./defaults";
 import type { GetHistoryResult, RawSiteMetadata, SiteDigest } from "./types";
 
 /**

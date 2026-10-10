@@ -3,6 +3,7 @@ import { normalizeBlockList } from "@homepage/agent-core";
 import { validateConnection, type ConnectionSettings } from "@/lib/storage";
 import { ConnectionFields } from "./ConnectionFields";
 import { describeSchedule, isOffText, parseSchedule, PRESET_SCHEDULES } from "@/lib/auto-rebuild";
+import { Combobox } from "./Combobox";
 
 export function SettingsModal({
   initialPrompt,
@@ -111,26 +112,22 @@ export function SettingsModal({
             </label>
             <label className="settings-inline" data-disabled={!autoRebuild}>
               <span>Rebuild every</span>
-              <input
-                className="settings-schedule-input"
-                list="rebuild-schedules"
-                type="text"
-                value={rebuildSchedule}
-                disabled={!autoRebuild}
-                spellCheck={false}
-                aria-label="Rebuild schedule"
-                aria-invalid={Boolean(scheduleProblem)}
-                placeholder="12h"
-                onChange={(e) => onChangeSchedule(e.target.value)}
-              />
-              <span className="settings-schedule-preview">
-                {scheduleProblem || describeSchedule(schedule)}
+              <span className="settings-schedule-field">
+                <Combobox
+                  id="rebuild-schedule"
+                  ariaLabel="Rebuild schedule"
+                  disabled={!autoRebuild}
+                  invalid={Boolean(scheduleProblem)}
+                  value={rebuildSchedule}
+                  onChange={onChangeSchedule}
+                  options={PRESET_SCHEDULES.map((preset) => ({ value: preset.value, label: preset.label }))}
+                  placeholder="12h"
+                  emptyText="Press Escape to keep your text, or pick a preset"
+                />
+                <span className="settings-schedule-preview">
+                  {scheduleProblem || describeSchedule(schedule)}
+                </span>
               </span>
-              <datalist id="rebuild-schedules">
-                {PRESET_SCHEDULES.map((preset) => (
-                  <option key={preset.value} value={preset.value}>{preset.label}</option>
-                ))}
-              </datalist>
             </label>
             <p className="settings-help">
               Pick a preset or type your own: <code>15m</code>, <code>1h</code>, <code>2d</code>, or cron such as

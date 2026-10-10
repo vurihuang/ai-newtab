@@ -36,8 +36,8 @@ export const LOG_RETENTION = 40;
 
 // page → worker
 export type PageMsg =
-  | { kind: "subscribe" } //                    → replies with a snapshot
-  | { kind: "startBuild"; resume?: boolean } // no-op if one is already running
+  | { kind: "subscribe" } //            → replies with a snapshot
+  | { kind: "startBuild" } //           no-op if one is already running
   | { kind: "cancel" };
 
 // worker → page (broadcast to every connected tab)
@@ -56,9 +56,9 @@ export type BuildMsg =
  * stepper.
  */
 export const BUILD_STEPS: { label: string; phases: RunPhase[] }[] = [
-  { label: "Preparing agent", phases: ["setup", "session-create"] },
-  { label: "Reading your history", phases: ["history"] },
-  { label: "Opening pages in your browser", phases: ["scraping"] },
+  { label: "Reading your history", phases: ["setup", "history"] },
+  { label: "Choosing pages", phases: ["thinking"] },
+  { label: "Reading pages in your browser", phases: ["scraping"] },
   { label: "Analyzing pages", phases: ["analyzing"] },
   { label: "Writing your homepage", phases: ["writing", "cleanup", "done"] },
 ];

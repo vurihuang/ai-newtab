@@ -15,7 +15,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [configured, setConfigured] = useState(false);
   const [connection, setConnection] = useState<ConnectionSettings>({
-    provider: "openai", baseUrl: DEFAULT_GATEWAY_URL, model: DEFAULT_GATEWAY_MODEL, apiKey: "",
+    baseUrl: DEFAULT_GATEWAY_URL, model: DEFAULT_GATEWAY_MODEL, apiKey: "",
   });
   const [systemPrompt, setSystemPrompt] = useState("");
   const [blockedSites, setBlockedSites] = useState<string[]>(DEFAULT_BLOCKED_SITES);
@@ -23,8 +23,6 @@ export default function App() {
   const [rebuildSchedule, setRebuildSchedule] = useState(`${DEFAULT_REBUILD_INTERVAL_HOURS}h`);
   /** Transpiled homepage, ready for Sandpack. */
   const [renderedCode, setRenderedCode] = useState<string | null>(null);
-  /** A session left mid-flight, offered as "Resume interrupted build". */
-  const [resumable, setResumable] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   /** Expand the full progress view over an existing homepage. */
   const [viewProgress, setViewProgress] = useState(false);
@@ -43,18 +41,16 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const [settings, homepage, activeSession] = await Promise.all([
+        const [settings, homepage] = await Promise.all([
           loadSettings(),
           loadHomepage(),
-          extensionStore.get<string>(KEYS.activeSessionId),
         ]);
         setConfigured(settings.connectionConfigured);
-        setConnection({ provider: settings.provider, baseUrl: settings.baseUrl, apiKey: settings.apiKey, model: settings.model });
+        setConnection({ baseUrl: settings.baseUrl, apiKey: settings.apiKey, model: settings.model });
         setSystemPrompt(settings.systemPrompt);
         setBlockedSites(settings.blockedSites);
         setAutoRebuild(settings.autoRebuild);
         setRebuildSchedule(settings.rebuildSchedule);
-        setResumable(settings.provider === "anthropic" ? activeSession ?? null : null);
         if (homepage?.code) setRenderedCode(toRenderable(homepage.code));
       } finally {
         setLoading(false);
@@ -134,11 +130,6 @@ export default function App() {
             Build today&apos;s homepage
           </button>
           <button style={btn} onClick={() => setShowSettings(true)}>⚙️ Settings</button>
-          {resumable && (
-            <button style={{ ...btn, backgroundColor: "#555" }} onClick={() => build({ resume: true })}>
-              Resume interrupted build
-            </button>
-          )}
         </div>
         {settingsModal}
       </div>

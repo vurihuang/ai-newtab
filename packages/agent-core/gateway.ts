@@ -1,5 +1,5 @@
 import { buildHistoryDigest } from "./history-digest";
-import { DEFAULTS } from "./schemas";
+import { DEFAULTS } from "./defaults";
 import { DEFAULT_BLOCKED_SITES, isAllowedUrl, normalizeBlockList } from "./site-filter";
 import type { BrowserBridge, RunCallbacks } from "./types";
 

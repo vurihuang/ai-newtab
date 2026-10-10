@@ -6,7 +6,7 @@
  *   2. the new-tab override renders (the API-key screen on a fresh profile),
  *   3. the worker answers `subscribe` on the build port with a snapshot,
  *   4. unconfigured builds fail cleanly,
- *   5. gateway settings and model discovery work through the UI,
+ *   5. the model list is read automatically and the settings dialog fits the viewport,
  *   6. a complete gateway build reads a fixture page and saves valid TSX.
  *
  * No external model API calls are made. Chrome 136+ ignores `--load-extension`, so the
@@ -243,9 +243,10 @@ try {
   };
   const fill = async (label: string, value: string) => {
     await page.evaluate(`(() => {
-      const label = [...document.querySelectorAll('label')].find(e => e.textContent.includes(${JSON.stringify(label)}));
-      const input = label?.querySelector('input');
-      if (!input) throw new Error('Input not found');
+      const text = ${JSON.stringify(label)};
+      const named = [...document.querySelectorAll('input[aria-label]')].find(i => i.getAttribute('aria-label').includes(text));
+      const input = named ?? [...document.querySelectorAll('label')].find(e => e.textContent.includes(text))?.querySelector('input');
+      if (!input) throw new Error('Input not found: ' + text);
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)});
       input.dispatchEvent(new Event('input', { bubbles: true }));
     })()`);
@@ -255,11 +256,10 @@ try {
     if (!button) throw new Error('Button not found');
     button.click();
   })()`);
-  await fill("API Base URL", `http://127.0.0.1:${fixture.port}/v1`);
-  await fill("Gateway API key", "fixture-key");
-  await click("Load models");
-  await waitUntil("document.querySelectorAll('#gateway-models option').length === 2");
-  check("model discovery works from the extension page", true);
+  await fill("Endpoint", `http://127.0.0.1:${fixture.port}/v1`);
+  await fill("API key", "fixture-key");
+  await waitUntil("document.querySelector('.field-status')?.textContent?.includes('models available')");
+  check("the model list is read from the gateway automatically", true);
   await fill("Model ID", "fixture/model");
   await click("Save connection");
   await waitUntil("document.body.innerText.includes(\"Build today's homepage\")");
@@ -269,8 +269,8 @@ try {
   await click("Save");
   await waitUntil("!document.body.innerText.includes('Customize your homepage')");
   const settingsSaved = await page.evaluate<boolean>(`(async () => {
-    const s = await chrome.storage.local.get(['provider', 'baseUrl', 'apiKey', 'model', 'connectionConfigured']);
-    return s.provider === 'openai' && s.model === 'fixture/custom' && s.apiKey === 'fixture-key' && s.connectionConfigured === true;
+    const s = await chrome.storage.local.get(['baseUrl', 'apiKey', 'model', 'connectionConfigured']);
+    return s.model === 'fixture/custom' && s.apiKey === 'fixture-key' && s.connectionConfigured === true;
   })()`);
   check("custom gateway connection persists before the first build", settingsSaved);
 
@@ -296,19 +296,34 @@ try {
   check("only the settings body scrolls", dialogLayout[".settings-body"].scrolls === true, JSON.stringify(dialogLayout[".settings-body"]));
   await fill("Rebuild every", "15m");
   await waitUntil("document.querySelector('.settings-schedule-preview')?.textContent?.includes('15 minutes')");
-  const scheduleValid = await page.evaluate<boolean>("document.querySelector('.settings-schedule-input')?.getAttribute('aria-invalid') === 'false'");
+  const scheduleValid = await page.evaluate<boolean>("document.querySelector('#rebuild-schedule')?.getAttribute('aria-invalid') === 'false'");
   check("a custom duration shows its next run", scheduleValid);
   await fill("Rebuild every", "0 9 * * mon");
-  await waitUntil("document.querySelector('.settings-schedule-preview')?.textContent?.includes('next')");
+  await waitUntil("document.querySelector('.settings-schedule-preview')?.textContent?.includes('Runs on schedule')");
   await fill("Rebuild every", "not a schedule");
-  await waitUntil("document.querySelector('.settings-schedule-input')?.getAttribute('aria-invalid') === 'true'");
+  await waitUntil("document.querySelector('#rebuild-schedule')?.getAttribute('aria-invalid') === 'true'");
   check("an invalid schedule is flagged instead of silently accepted", true);
   await fill("Rebuild every", "off");
   await waitUntil("document.querySelector('.settings-schedule-preview')?.textContent?.includes('off')");
-  const offAccepted = await page.evaluate<boolean>("document.querySelector('.settings-schedule-input')?.getAttribute('aria-invalid') === 'false'");
+  const offAccepted = await page.evaluate<boolean>("document.querySelector('#rebuild-schedule')?.getAttribute('aria-invalid') === 'false'");
   check("off disables the schedule without an error", offAccepted);
   await fill("Rebuild every", "1h");
-  await waitUntil("document.querySelector('.settings-schedule-input')?.getAttribute('aria-invalid') === 'false'");
+  await waitUntil("document.querySelector('#rebuild-schedule')?.getAttribute('aria-invalid') === 'false'");
+
+  // ---- the styled dropdown lists what the gateway reported ------------------
+  await fill("Model ID", "");
+  await page.evaluate("document.querySelector('#model-id').focus()");
+  await waitUntil("document.querySelectorAll('.combo-option').length === 2");
+  const row = await page.evaluate<any>("(() => { const o = document.querySelector('.combo-option[data-value=\"fixture/model\"]'); return { text: o?.textContent, role: o?.getAttribute('role') }; })()");
+  await page.evaluate("document.querySelector('.combo-option[data-value=\"fixture/model\"]').dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))");
+  const picked = await page.evaluate<any>("({ value: document.querySelector('#model-id').value, closed: !document.querySelector('.combo-list') })");
+  check(
+    "picking a row from the styled list fills the field and closes the list",
+    row.role === "option" && picked.value === "fixture/model" && picked.closed,
+    `${row.text} → ${picked.value}`,
+  );
+  await fill("Model ID", "fixture/custom");
+  await fill("Rebuild every", "1h");
   await click("Save");
   await waitUntil("!document.body.innerText.includes('Customize your homepage')");
   const savedSchedule = await page.evaluate<any>("chrome.storage.local.get('rebuildSchedule')");

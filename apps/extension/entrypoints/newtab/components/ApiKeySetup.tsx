@@ -21,7 +21,7 @@ export function ApiKeySetup({ initialConnection, onSave }: {
       <div className="settings-modal" style={{ maxWidth: 560 }}>
         <header className="settings-header">
           <h2>Connect your model</h2>
-          <p>Use Magpie or another OpenAI-compatible API to build your homepage. No Anthropic key is needed in gateway mode.</p>
+          <p>Point the extension at Magpie, or any other OpenAI-compatible gateway, to build your homepage.</p>
         </header>
         <div className="settings-body">
           <section className="settings-section" style={{ borderBottom: "none" }}>

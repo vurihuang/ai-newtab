@@ -1,5 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { runHomepageBuild, runGatewayBuild, type HomepageModel, type RunCallbacks, type RunPhase } from "@homepage/agent-core";
+import { runGatewayBuild, type RunCallbacks, type RunPhase } from "@homepage/agent-core";
 import { parseSchedule, shouldAutoRebuild } from "./auto-rebuild";
 import { browserBridge } from "./browser-bridge";
 import {
@@ -59,7 +58,7 @@ export class BuildManager {
         this.send(port, { kind: "snapshot", state: this.state });
         break;
       case "startBuild":
-        void this.startBuild({ resume: msg.resume });
+        void this.startBuild();
         break;
       case "cancel":
         this.cancel();
@@ -83,10 +82,9 @@ export class BuildManager {
   // ---- heartbeat -----------------------------------------------------------
 
   /**
-   * Called on worker wake and on every alarm tick. If a session was left
-   * mid-flight, reattach and continue (lossless — the orchestrator replays the
-   * event log and re-answers orphaned tool calls). Otherwise, consider the daily
-   * rebuild. The single-flight lock is the arbiter that keeps these from racing.
+   * Called on worker wake and on every alarm tick. If a build was left
+   * mid-flight, report it once; otherwise consider the scheduled rebuild. The
+   * single-flight lock is the arbiter that keeps these from racing.
    */
   async tick() {
     if (this.running) {
@@ -96,28 +94,21 @@ export class BuildManager {
       return;
     }
 
-    // Chat Completions has no resumable server session. Surface an interrupted
-    // run once; do not turn a worker restart into an unbounded automatic retry.
+    // Chat Completions has no resumable server session, so surface an interrupted
+    // run once rather than turning a worker restart into an unbounded retry.
     const interruptedGateway = await extensionStore.get<boolean>(KEYS.gatewayBuildInProgress);
     if (this.running) return; // A manual build may have started during the read.
     if (interruptedGateway) {
       this.running = true;
       try {
         await extensionStore.remove(KEYS.gatewayBuildInProgress);
-        const message = "The gateway build was interrupted. Click Rebuild to start again.";
+        const message = "The build was interrupted. Click Rebuild to start again.";
         this.state = { ...INITIAL_BUILD_STATE, phase: "error", error: message };
         this.broadcast({ kind: "error", message });
         await this.mirror(true);
       } finally {
         this.running = false;
       }
-      return;
-    }
-
-    const settings = await loadSettings();
-    const sessionId = await extensionStore.get<string>(KEYS.activeSessionId);
-    if (sessionId && settings.provider === "anthropic") {
-      void this.startBuild({ resume: true });
       return;
     }
 
@@ -136,7 +127,7 @@ export class BuildManager {
     if (
       !shouldAutoRebuild({
         enabled: settings.autoRebuild,
-        hasApiKey: settings.connectionConfigured && (settings.provider === "openai" || Boolean(settings.apiKey)),
+        hasApiKey: settings.connectionConfigured,
         isRunning: this.running,
         lastBuildTimestamp: homepage?.timestamp,
         lastAutoAttemptTimestamp: lastAttempt,
@@ -150,12 +141,12 @@ export class BuildManager {
     // Stamp the attempt before starting so a second wake (or a cancel/failure)
     // doesn't re-trigger it within the interval.
     await extensionStore.set(KEYS.lastAutoBuildAttempt, now.toISOString());
-    void this.startBuild({ resume: false });
+    void this.startBuild();
   }
 
   // ---- the build -----------------------------------------------------------
 
-  async startBuild(opts: { resume?: boolean } = {}) {
+  async startBuild() {
     if (this.running) {
       console.log("[BuildManager] startBuild ignored — a build is already running");
       return; // single-flight: a second start just attaches.
@@ -167,7 +158,7 @@ export class BuildManager {
     this.state = { ...INITIAL_BUILD_STATE, running: true, phase: "setup" };
     this.broadcast({ kind: "snapshot", state: this.state });
     this.startKeepalive();
-    console.log("[BuildManager] build started", { resume: Boolean(opts.resume) });
+    console.log("[BuildManager] build started");
 
     try {
       const settings = await loadSettings();
@@ -186,19 +177,8 @@ export class BuildManager {
         callbacks,
       };
       let result;
-      if (connection.provider === "openai") {
-        await extensionStore.set(KEYS.gatewayBuildInProgress, true);
-        result = await runGatewayBuild({ ...shared, config: connection });
-      } else {
-        const client = new Anthropic({ apiKey: connection.apiKey, dangerouslyAllowBrowser: true });
-        result = await runHomepageBuild({
-          ...shared,
-          client,
-          store: extensionStore,
-          model: connection.model as HomepageModel,
-          resumeSessionId: opts.resume ? await extensionStore.get<string>(KEYS.activeSessionId) : undefined,
-        });
-      }
+      await extensionStore.set(KEYS.gatewayBuildInProgress, true);
+      result = await runGatewayBuild({ ...shared, config: connection });
 
       // Reject invalid TSX before replacing a previously working homepage.
       transform(result.code, { transforms: ["typescript", "jsx"] });

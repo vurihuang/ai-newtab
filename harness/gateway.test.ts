@@ -95,6 +95,18 @@ describe("OpenAI-compatible gateway", () => {
     expect(calls[0].body.messages[1].content).not.toContain("127.0.0.1");
   });
 
+  test("excludes blocked and local-network domains from the digest and its count", async () => {
+    const { config, calls } = gateway([json(JSON.stringify({ urls: [page.url] })), json(component)]);
+    const sent = await runGatewayBuild({ config, bridge: bridge() });
+    expect(sent.code).toBe(component);
+    const digest = JSON.parse(calls[0].body.messages[1].content);
+    // Four domains were seen; the blocked and local-network ones leave no trace.
+    expect(digest.totalSitesSeen).toBe(2);
+    expect(digest.sites).toHaveLength(2);
+    expect(calls[0].body.messages[1].content).not.toContain("mail.google.com");
+    expect(calls[0].body.messages[1].content).not.toContain("127.0.0.1");
+  });
+
   test("filters blocked, private, unrelated and duplicate URLs before scraping", async () => {
     const { config } = gateway([
       json(JSON.stringify({ urls: [page.url, page.url, "https://mail.google.com/", "http://127.0.0.1/", "https://unseen.example/", "file:///tmp/a"] })), json(component),

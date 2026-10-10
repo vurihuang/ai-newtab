@@ -86,8 +86,8 @@ export function useHomepageBuild(onDone: (code: string) => void) {
     };
   }, []);
 
-  const build = useCallback((opts?: { resume?: boolean }) => {
-    portRef.current?.postMessage({ kind: "startBuild", resume: opts?.resume } satisfies PageMsg);
+  const build = useCallback(() => {
+    portRef.current?.postMessage({ kind: "startBuild" } satisfies PageMsg);
     // Optimistic: flip to the build screen now; the worker's snapshot and
     // deltas take over from here.
     setState({ ...INITIAL_BUILD_STATE, running: true, phase: "setup" });

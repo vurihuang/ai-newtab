@@ -10,11 +10,11 @@ export default defineConfig({
       "history", //       getHistory tool
       "tabs", //          getPageHtml: open pages and watch them load
       "scripting", //     getPageHtml: inject the scraper into loaded pages
-      "storage", //       API key, settings, the built homepage
+      "storage", //       gateway credentials, settings, the built homepage
       "alarms", //        heartbeat: scheduled rebuilds + reattach after a worker kill
       "notifications", // surface a failed headless rebuild when no tab is open
     ],
-    // Needed to scrape arbitrary pages; also exempts api.anthropic.com from CORS.
+    // Needed to scrape arbitrary pages and to reach a local gateway endpoint.
     host_permissions: ["<all_urls>"],
   },
 });

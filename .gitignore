@@ -4,7 +4,7 @@ dist/
 .wxt/
 coverage/
 
-# Secrets — gateway and Anthropic keys for the harness
+# Secrets — gateway credentials for the harness
 .env
 .env.*
 !.env.example

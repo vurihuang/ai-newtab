@@ -1,11 +1,8 @@
 import {
-  DEFAULT_MODEL,
   DEFAULT_BLOCKED_SITES,
   DEFAULT_GATEWAY_URL,
   DEFAULT_GATEWAY_MODEL,
-  MODEL_CHOICES,
   normalizeGatewayUrl,
-  STORAGE_KEYS as AGENT_KEYS,
   type KVStore,
 } from "@homepage/agent-core";
 import { DEFAULT_REBUILD_INTERVAL_HOURS } from "./schedule";
@@ -17,12 +14,11 @@ import { DEFAULT_REBUILD_INTERVAL_HOURS } from "./schedule";
  * distribute (see ARCHITECTURE.md → Privacy).
  */
 export const KEYS = {
-  ...AGENT_KEYS,
+  apiKey: "apiKey",
   homepage: "homepageData",
   systemPrompt: "systemPrompt",
   blockedSites: "blockedSites",
   model: "model",
-  provider: "provider",
   baseUrl: "baseUrl",
   connectionConfigured: "connectionConfigured",
   gatewayBuildInProgress: "gatewayBuildInProgress",
@@ -38,14 +34,14 @@ export const KEYS = {
 } as const;
 
 export interface Homepage {
-  /** The agent's raw TSX source. */
+  /** The model's raw TSX source. */
   code: string;
   /** ISO timestamp of when it was built. */
   timestamp: string;
 }
 
+/** Endpoint, credential and model for the OpenAI-compatible gateway. */
 export interface ConnectionSettings {
-  provider: "openai" | "anthropic";
   baseUrl: string;
   apiKey: string;
   model: string;
@@ -61,7 +57,6 @@ export interface Settings extends ConnectionSettings {
   rebuildSchedule: string;
 }
 
-/** The `KVStore` agent-core persists its agent/environment/session IDs through. */
 export const extensionStore: KVStore = {
   async get<T>(key: string): Promise<T | undefined> {
     const result = await browser.storage.local.get(key);
@@ -81,27 +76,21 @@ export async function loadSettings(): Promise<Settings> {
     KEYS.systemPrompt,
     KEYS.blockedSites,
     KEYS.model,
-    KEYS.provider,
     KEYS.baseUrl,
     KEYS.connectionConfigured,
     KEYS.autoRebuild,
     KEYS.rebuildSchedule,
     KEYS.rebuildIntervalHours,
   ]);
-  const model = s[KEYS.model] as string | undefined;
-  // Preserve pre-fork Anthropic installations; new installs start with Magpie.
-  const provider = s[KEYS.provider] === "anthropic" || (!s[KEYS.provider] && s[KEYS.apiKey])
-    ? "anthropic" : "openai";
   return {
-    provider,
     baseUrl: (s[KEYS.baseUrl] as string | undefined) ?? DEFAULT_GATEWAY_URL,
-    connectionConfigured: s[KEYS.connectionConfigured] === true || Boolean(s[KEYS.apiKey]),
+    // Only an explicit flag counts: a browser that carried a credential from an
+    // older build should land on the connection screen rather than mid-build.
+    connectionConfigured: s[KEYS.connectionConfigured] === true,
     apiKey: (s[KEYS.apiKey] as string | undefined) ?? "",
     systemPrompt: (s[KEYS.systemPrompt] as string | undefined) ?? "",
     blockedSites: (s[KEYS.blockedSites] as string[] | undefined) ?? [...DEFAULT_BLOCKED_SITES],
-    model: provider === "openai"
-      ? model?.trim() || DEFAULT_GATEWAY_MODEL
-      : MODEL_CHOICES.find((m) => m.id === model)?.id ?? DEFAULT_MODEL,
+    model: (s[KEYS.model] as string | undefined)?.trim() || DEFAULT_GATEWAY_MODEL,
     autoRebuild: s[KEYS.autoRebuild] !== false,
     rebuildSchedule: (s[KEYS.rebuildSchedule] as string | undefined) ??
       ((s[KEYS.rebuildIntervalHours] as number | undefined) ? `${s[KEYS.rebuildIntervalHours]}h` : `${DEFAULT_REBUILD_INTERVAL_HOURS}h`),
@@ -115,19 +104,14 @@ export async function saveSetting<K extends "apiKey" | "systemPrompt" | "blocked
   await browser.storage.local.set({ [KEYS[key]]: value });
 }
 
+/** Trim and check the connection before anything reads it. */
 export function validateConnection(connection: ConnectionSettings): ConnectionSettings {
   const model = connection.model.trim();
-  if (!model) throw new Error("Enter a model ID.");
-  const apiKey = connection.apiKey.trim();
-  if (connection.provider === "anthropic") {
-    if (!apiKey) throw new Error("Enter your Anthropic API key.");
-    if (!MODEL_CHOICES.some((m) => m.id === model)) throw new Error("Choose a supported Anthropic model.");
-  }
+  if (!model) throw new Error("Enter a model ID, or load the list from your gateway.");
   return {
-    provider: connection.provider,
+    baseUrl: normalizeGatewayUrl(connection.baseUrl),
+    apiKey: connection.apiKey.trim(),
     model,
-    apiKey,
-    baseUrl: connection.provider === "openai" ? normalizeGatewayUrl(connection.baseUrl) : connection.baseUrl,
   };
 }
 
