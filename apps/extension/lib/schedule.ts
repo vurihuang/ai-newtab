@@ -99,6 +99,12 @@ function parseCron(expression: string): CronExpression | null {
   return { fields: parsed as FieldSet[] };
 }
 
+/** Values that deliberately disable the schedule instead of being a typo. */
+export function isOffText(value: string): boolean {
+  const text = value.trim();
+  return !text || /^(off|none|never|manual)$/i.test(text);
+}
+
 const matches = (set: FieldSet, value: number) => set.kind === "any" || set.values.has(value);
 
 function floorToMinute(date: Date) {
@@ -148,7 +154,7 @@ export function parseSchedule(input: string | number | null | undefined): Schedu
   }
 
   const text = input.trim();
-  if (!text || /^(off|none|never|manual)$/i.test(text)) return { kind: "off" };
+  if (isOffText(text)) return { kind: "off" };
 
   // Duration first: "90 min" has a space but is not cron.
   const duration = text.match(/^(\d+(?:\.\d+)?)\s*(m|min|minutes?|h|hr|hours?|d|days?|w|weeks?)?$/i);

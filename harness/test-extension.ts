@@ -303,6 +303,10 @@ try {
   await fill("Rebuild every", "not a schedule");
   await waitUntil("document.querySelector('.settings-schedule-input')?.getAttribute('aria-invalid') === 'true'");
   check("an invalid schedule is flagged instead of silently accepted", true);
+  await fill("Rebuild every", "off");
+  await waitUntil("document.querySelector('.settings-schedule-preview')?.textContent?.includes('off')");
+  const offAccepted = await page.evaluate<boolean>("document.querySelector('.settings-schedule-input')?.getAttribute('aria-invalid') === 'false'");
+  check("off disables the schedule without an error", offAccepted);
   await fill("Rebuild every", "1h");
   await waitUntil("document.querySelector('.settings-schedule-input')?.getAttribute('aria-invalid') === 'false'");
   await click("Save");

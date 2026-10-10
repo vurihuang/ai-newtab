@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { normalizeBlockList } from "@homepage/agent-core";
 import { validateConnection, type ConnectionSettings } from "@/lib/storage";
 import { ConnectionFields } from "./ConnectionFields";
-import { describeSchedule, parseSchedule, PRESET_SCHEDULES } from "@/lib/auto-rebuild";
+import { describeSchedule, isOffText, parseSchedule, PRESET_SCHEDULES } from "@/lib/auto-rebuild";
 
 export function SettingsModal({
   initialPrompt,
@@ -31,7 +31,8 @@ export function SettingsModal({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const schedule = parseSchedule(rebuildSchedule);
-  const scheduleProblem = rebuildSchedule.trim() && schedule.kind === "off"
+  // "off" is a deliberate choice; only an unparseable value is a problem.
+  const scheduleProblem = !isOffText(rebuildSchedule) && schedule.kind === "off"
     ? "Use a duration like 15m, 1h, 1d, or a five-field cron expression such as 0 9 * * *."
     : "";
   const dialog = useRef<HTMLDivElement>(null);
@@ -133,7 +134,7 @@ export function SettingsModal({
             </label>
             <p className="settings-help">
               Pick a preset or type your own: <code>15m</code>, <code>1h</code>, <code>2d</code>, or cron such as
-              <code>0 9 * * *</code> and <code>0 9 * * mon</code>. Rebuilds start only after a manual build.
+              <code>0 9 * * *</code> and <code>0 9 * * mon</code>. Type <code>off</code> to disable.
             </p>
           </section>
         </div>
