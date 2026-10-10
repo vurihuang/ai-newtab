@@ -80,9 +80,13 @@ test("next run is searchable but bounded", () => {
 
 test("the preview describes what the schedule will do", () => {
   const now = new Date(2026, 0, 1, 9, 0);
-  expect(describeSchedule(parseSchedule("15m")!, now)).toContain("15 minutes");
-  expect(describeSchedule(parseSchedule("2d")!, now)).toContain("2 days");
-  expect(describeSchedule(parseSchedule("0 9 * * *")!, now)).toContain("tomorrow at");
+  expect(describeSchedule(parseSchedule("15m")!, now)).toContain("every 15 minutes");
+  expect(describeSchedule(parseSchedule("90m")!, now)).toContain("1.5 hours");
+  expect(describeSchedule(parseSchedule("2d")!, now)).toContain("every 2 days");
+  const cron = describeSchedule(parseSchedule("0 9 * * *")!, now);
+  expect(cron).toContain("Runs on schedule");
+  // Weekday and time only: no mixed-language "today at" wording.
+  expect(cron).toMatch(/\d{1,2}:\d{2}/);
   expect(describeSchedule(parseSchedule("off")!, now)).toBe("Automatic rebuilds are off.");
 });
 

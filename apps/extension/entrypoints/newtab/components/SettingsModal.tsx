@@ -105,7 +105,7 @@ export function SettingsModal({
               />
               <span className="settings-toggle-text">
                 Rebuild in the background
-                <span className="settings-help">Once your homepage is older than the interval below, your next tab shows a fresh one.</span>
+                <span className="settings-help">Once your homepage is older than the schedule, your next tab shows a fresh one.</span>
               </span>
             </label>
             <label className="settings-inline" data-disabled={!autoRebuild}>

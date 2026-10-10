@@ -75,8 +75,6 @@ function parseField(field: string, min: number, max: number, names?: string[]): 
 
 interface CronExpression {
   fields: FieldSet[];
-  /** Day-of-month and day-of-week are both constrained, which most cron quirks make unsafe. */
-  plain: boolean;
 }
 
 function parseCron(expression: string): CronExpression | null {
@@ -98,7 +96,7 @@ function parseCron(expression: string): CronExpression | null {
     parseField(normalizedWeekday, 0, 6, WEEKDAY_NAMES),
   ];
   if (parsed.some((field) => field === null)) return null;
-  return { fields: parsed as FieldSet[], plain: true };
+  return { fields: parsed as FieldSet[] };
 }
 
 const matches = (set: FieldSet, value: number) => set.kind === "any" || set.values.has(value);
@@ -198,32 +196,33 @@ export function isDue(schedule: Schedule, lastBuild: Date, lastAttempt: Date | n
 }
 
 const MINUTE = 60_000;
-const HOUR = 60 * MINUTE;
+
+const clock = (date: Date) => date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+/** Weekday and time, so a cron preview needs no "today/tomorrow" wording. */
+const stamp = (date: Date) =>
+  `${date.toLocaleDateString([], { weekday: "short" })} ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+
+function durationLabel(milliseconds: number): string {
+  const minutes = Math.round(milliseconds / MINUTE);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  if (minutes < 60 * 48) {
+    const hours = minutes / 60;
+    return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} hours`;
+  }
+  return `${Math.round(minutes / (60 * 24))} days`;
+}
 
 /** Next run time as text, short enough for a form hint. */
 export function describeSchedule(schedule: Schedule, now = new Date()): string {
   if (schedule.kind === "off") return "Automatic rebuilds are off.";
   if (schedule.kind === "duration") {
-    const minutes = Math.round(schedule.milliseconds / MINUTE);
-    const label = minutes < 60
-      ? `${minutes} minute${minutes === 1 ? "" : "s"}`
-      : minutes < 60 * 36
-        ? `${Math.round(minutes / 60)} hours`
-        : `${Math.round(minutes / (60 * 24))} days`;
     const next = new Date(now.getTime() + schedule.milliseconds);
-    return `Rebuilds ${label} after the last one — next around ${format(next, now)}.`;
+    return `Rebuilds every ${durationLabel(schedule.milliseconds)} — next around ${
+      schedule.milliseconds >= DAY_MS ? stamp(next) : clock(next)
+    }.`;
   }
   const next = nextRunAt(schedule, now);
   return next
-    ? `Runs on schedule — next ${format(next, now)}.`
+    ? `Runs on schedule — next ${stamp(next)}.`
     : "This expression matches no time in the next 60 days.";
-}
-
-function format(date: Date, now: Date): string {
-  const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const days = Math.round((startOfDay(date).getTime() - startOfDay(now).getTime()) / DAY_MS);
-  if (days === 0) return `today at ${time}`;
-  if (days === 1) return `tomorrow at ${time}`;
-  if (days < 7) return `${date.toLocaleDateString([], { weekday: "long" })} at ${time}`;
-  return `${date.toLocaleDateString([], { month: "short", day: "numeric" })} at ${time}`;
 }
