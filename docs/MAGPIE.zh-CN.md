@@ -15,11 +15,14 @@
 | 字段 | 配置 |
 | --- | --- |
 | Endpoint | `http://127.0.0.1:3425/v1`，或你实际设置的 API 地址 |
-| API key | Magpie 启动时给出的链接中带的密钥；仅无鉴权的网关可以留空 |
+| API key | 本机网关不校验，留空即可；跨网络共享的网关用 `magpie gateway-key list` 里的密钥 |
 | Model | 打开设置即自动读取网关的模型列表，也可自由输入 |
 
+终端里也可以直接查：`magpie serve` 打印 Endpoint、密钥和模型数量，`magpie models` 列出全部可选模型。扩展的下拉列表读的就是同一个列表 `/v1/models`。
+
 - Endpoint 用 API 端口，不是 Web 管理页面端口。地址一般以 `/v1` 结尾，不要追加 `/chat/completions` 或 `/models`。
-- 模型列表在修改 Endpoint 或 API key 后自动重新读取。点击 **Refresh** 可以手动刷新。
+- 模型列表在打开设置、修改 Endpoint 或 API key、点击下拉框、以及在输入框中搜索时自动重新读取，不需要手动刷新。
+- 列表不做缓存，内容与 `magpie models` 一致。已保存的模型 ID 若不在当前列表中，界面会提示，但仍允许使用。
 - 下拉框支持键盘上下选择、回车确认、Esc 关闭，也允许直接输入任意模型 ID。
 - 模型 ID 使用网关返回的原值，例如 `codex/gpt-6-astra`。不要加 Pi 中用于标识服务商的 `magpie/` 前缀。
 - 模型必须支持 `/chat/completions` 文本请求。此版本不直接调用 `/responses` 或 `/messages`。

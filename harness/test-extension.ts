@@ -15,7 +15,7 @@
  * Run: pnpm build && pnpm extension:test
  * Set CHROME_PATH if Chrome isn't at the default macOS location.
  */
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -23,15 +23,35 @@ import { join } from "node:path";
 const CHROME =
   process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const EXT = join(import.meta.dir, "../apps/extension/.output/chrome-mv3");
-const PORT = Number(process.env.CHROME_DEBUG_PORT || 9333);
+
+/**
+ * Any free port, unless one is pinned. A fixed port collides with whatever else
+ * on the machine listens for CDP (an Electron app, another test run), and then
+ * this script drives that browser instead of the one it spawned.
+ */
+async function freePort(): Promise<number> {
+  const probe = Bun.serve({ port: 0, fetch: () => new Response(null) });
+  const port = Number(probe.port);
+  probe.stop(true);
+  return port;
+}
+const PORT = Number(process.env.CHROME_DEBUG_PORT) || (await freePort());
+/** What the browser we spawn must report over CDP. */
+const CHROME_VERSION = execFileSync(CHROME, ["--version"], { encoding: "utf-8" }).match(/[\d.]+/)?.[0] ?? "";
 let generationRequests = 0;
 let invalidCode = false;
+/** Mutable so the test can prove the extension re-reads instead of caching. */
+let fixtureModels = ["fixture/model", "fixture/custom"];
 const fixtureCode = `import React from 'react'; export default function PersonalizedHomepage() { return <main><h1>Fixture homepage</h1><a href="https://news.example.com/story">A real fixture story</a></main>; }`;
 const fixture = Bun.serve({
   port: 0,
   async fetch(request): Promise<Response> {
     const path = new URL(request.url).pathname;
-    if (path === "/v1/models") return Response.json({ data: [{ id: "fixture/model" }, { id: "fixture/custom" }] });
+    if (path === "/fixture/models" && request.method === "POST") {
+      fixtureModels = await request.json() as string[];
+      return Response.json({ models: fixtureModels });
+    }
+    if (path === "/v1/models") return Response.json({ data: fixtureModels.map((id) => ({ id })) });
     if (path === "/v1/chat/completions") {
       if (request.headers.get("authorization") !== "Bearer fixture-key") return new Response(null, { status: 401 });
       const body = await request.json() as any;
@@ -136,6 +156,14 @@ try {
   }
   if (!version) throw new Error("Chrome devtools endpoint never came up");
   console.log(`   ${version.Browser}\n`);
+
+  // A stale listener on the same port answers happily but is not our browser.
+  if (CHROME_VERSION && !String(version.Browser).includes(CHROME_VERSION)) {
+    throw new Error(
+      `Port ${PORT} is answered by ${version.Browser}, not the ${CHROME_VERSION} this script spawned. ` +
+        `Set CHROME_DEBUG_PORT to a free port and retry.`,
+    );
+  }
 
   // ---- load the unpacked extension ----------------------------------------
   const browser = await cdp(version.webSocketDebuggerUrl);
@@ -258,7 +286,8 @@ try {
   })()`);
   await fill("Endpoint", `http://127.0.0.1:${fixture.port}/v1`);
   await fill("API key", "fixture-key");
-  await waitUntil("document.querySelector('.field-status')?.textContent?.includes('models available')");
+  await fill("Model ID", "");
+  await waitUntil(`Boolean(document.querySelector('.combo-option[data-value="fixture/custom"]'))`);
   check("the model list is read from the gateway automatically", true);
   await fill("Model ID", "fixture/model");
   await click("Save connection");
@@ -324,6 +353,51 @@ try {
   );
   await fill("Model ID", "fixture/custom");
   await fill("Rebuild every", "1h");
+
+  // ---- the list follows the gateway, it is not read once and cached ---------
+  const setFixtureModels = (ids: string[]) =>
+    fetch(`http://127.0.0.1:${fixture.port}/fixture/models`, { method: "POST", body: JSON.stringify(ids) });
+  // Opening the picker asks the gateway again: a model added since mount appears.
+  await setFixtureModels(["fixture/model", "fixture/custom", "fixture/added-later"]);
+  await fill("Model ID", ""); // show every row, so a clipped list would be obvious
+  await page.evaluate("document.querySelector('#model-id').click()");
+  await waitUntil(`Boolean(document.querySelector('.combo-option[data-value="fixture/added-later"]'))`);
+  check("opening the picker re-reads the model list", true, `${await page.evaluate("document.querySelectorAll('.combo-option').length")} rows`);
+
+  // The dialog body scrolls, so a list drawn inside it would be clipped.
+  const listPlacement = await page.evaluate<any>(`(() => {
+    const list = document.querySelector('.combo-list');
+    if (!list) return null;
+    const rect = list.getBoundingClientRect();
+    return {
+      portaled: list.parentElement === document.body,
+      insideViewport: rect.top >= 0 && rect.bottom <= window.innerHeight + 1,
+      rows: list.querySelectorAll('.combo-option').length,
+      height: Math.round(rect.height),
+    };
+  })()`);
+  check(
+    "the list is drawn over the dialog, fully inside the viewport",
+    Boolean(listPlacement?.portaled && listPlacement.insideViewport),
+    JSON.stringify(listPlacement),
+  );
+
+  // Searching does too: only the newest list can offer this model.
+  await setFixtureModels(["zzz/fresh-model"]);
+  await fill("Model ID", "zzz");
+  await waitUntil(`Boolean(document.querySelector('.combo-option[data-value="zzz/fresh-model"]'))`);
+  check("typing re-reads the model list", true);
+  const afterSwap = await page.evaluate<any>(
+    "({ warn: document.querySelector('.field-warn')?.textContent, model: document.querySelector('#model-id')?.value })",
+  );
+  check(
+    "a model that Magpie no longer lists is flagged",
+    Boolean(afterSwap.warn),
+    JSON.stringify(afterSwap),
+  );
+  await setFixtureModels(["fixture/model", "fixture/custom"]);
+  await fill("Model ID", "fixture/custom");
+
   await click("Save");
   await waitUntil("!document.body.innerText.includes('Customize your homepage')");
   const savedSchedule = await page.evaluate<any>("chrome.storage.local.get('rebuildSchedule')");

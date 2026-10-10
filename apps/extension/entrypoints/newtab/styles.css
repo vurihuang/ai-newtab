@@ -425,25 +425,9 @@ body {
   min-width: 0;
 }
 .field-status {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
   margin: 8px 0 0;
   font-size: 12.5px;
   color: #1f7a52;
-}
-.field-refresh {
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--s-accent, #0066cc);
-  background: none;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
 }
 .field-status-error {
   color: #a02620;
@@ -577,16 +561,15 @@ body {
   background: var(--s-panel, #f6f8fb);
   color: var(--s-ink, #171b23);
 }
+/* Portaled to the body: the position and size come from the input's rect, so a
+   scrolling dialog cannot clip it and it can flip above the field. */
 .combo-list {
-  position: absolute;
-  z-index: 20;
-  left: 0;
-  right: 0;
-  top: calc(100% + 6px);
+  transform: translateY(var(--combo-shift, 0));
+  position: fixed;
+  z-index: 1100;
   margin: 0;
   padding: 6px;
-  list-style: none;
-  max-height: 236px;
+  box-sizing: border-box;
   overflow-y: auto;
   background: var(--s-surface, #fff);
   border: 1px solid var(--s-border, #e2e6ee);

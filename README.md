@@ -41,11 +41,15 @@ Three fields, nothing else:
 
 1. **Endpoint** — `http://127.0.0.1:3425/v1` by default. Use the gateway's API port,
    not its dashboard port, and stop at the `/v1` root.
-2. **API key** — the key Magpie prints next to the link it shows when it starts.
-   Leave it empty only for a gateway that requires no authentication.
+2. **API key** — leave it empty for a local gateway, which does not authenticate.
+   A gateway shared over the network needs a key from `magpie gateway-key list`.
 3. **Model** — read from `GET /models` as soon as the endpoint answers, and re-read
-   whenever the endpoint or key changes. Pick a row or type any ID the gateway
-   accepts.
+   whenever the endpoint or key changes, when you open the picker, and while you
+   search. Nothing is cached, so the list matches `magpie models`. An ID the list no
+   longer contains is flagged, not blocked — you can still type any ID.
+
+Prefer the terminal? `magpie serve` prints the endpoint, the key and the model count;
+`magpie models` lists every model ID you can pick.
 
 No cloud account, no server between the browser and the gateway, and the settings
 stay in the extension's local storage. The same three fields point at any other
@@ -128,10 +132,11 @@ onto a blocked host is dropped before its content is uploaded. Local-network
 addresses (localhost, private IPs, `.local` and `.internal` hosts) are always blocked.
 
 **Model connection.** Change the endpoint, API key and model in Settings. The model
-list is re-read automatically whenever the endpoint or key changes, and **Refresh**
-re-reads it on demand; typing a model ID by hand works even when `GET /models` is
-unavailable. **Save** applies settings to the next build; **Save & rebuild** starts
-a build immediately. An in-progress build keeps the connection it started with.
+list re-reads itself when the endpoint or key changes and every time you open the
+picker or search it, so a provider added in Magpie shows up without a reload; typing
+a model ID by hand works even when `GET /models` is unavailable. **Save** applies
+settings to the next build; **Save & rebuild** starts a build immediately. An
+in-progress build keeps the connection it started with.
 
 **Rebuild automatically.** On by default. Once your homepage is older than the
 schedule you set, the extension rebuilds it quietly in the background. Pick a

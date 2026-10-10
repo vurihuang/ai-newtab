@@ -1,4 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 export interface ComboOption {
   value: string;
@@ -24,6 +25,8 @@ export function Combobox({
   disabled = false,
   invalid = false,
   emptyText = "No matches — your text is used as typed",
+  onOpen,
+  onQuery,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -34,12 +37,49 @@ export function Combobox({
   disabled?: boolean;
   invalid?: boolean;
   emptyText?: string;
+  /** Opening the list: a chance to refresh the options first. */
+  onOpen?: () => void;
+  /** Every keystroke: a chance to refresh the options while searching. */
+  onQuery?: () => void;
 }) {
   const listId = `${useId()}-list`;
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
+  /** Viewport coordinates for the portaled list; null until measured. */
+  const [anchor, setAnchor] = useState<{ left: number; top: number; width: number; maxHeight: number; above: boolean } | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLUListElement>(null);
+
+  /**
+   * The list is portaled to the body, so a scrolling settings form cannot clip it.
+   * It follows its input, and flips above when the room below is too small.
+   */
+  const place = useCallback(() => {
+    const input = root.current?.querySelector("input");
+    if (!input) return;
+    const rect = input.getBoundingClientRect();
+    const below = window.innerHeight - rect.bottom - 12;
+    const above = below < 200 && rect.top > below;
+    setAnchor({
+      left: rect.left,
+      width: rect.width,
+      top: above ? rect.top - 6 : rect.bottom + 6,
+      maxHeight: Math.max(140, Math.min(236, above ? rect.top - 18 : below)),
+      above,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    window.addEventListener("resize", place);
+    // Capture phase: any scrolling ancestor moves the anchor, not just the window.
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, place]);
 
   const query = value.trim().toLowerCase();
   const visible = useMemo(() => {
@@ -65,7 +105,9 @@ export function Combobox({
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: MouseEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (root.current?.contains(target) || list.current?.contains(target)) return;
+      setOpen(false);
     };
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
@@ -76,11 +118,16 @@ export function Combobox({
     setOpen(false);
   };
 
+  const openList = () => {
+    setOpen(true);
+    onOpen?.();
+  };
+
   const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       if (!open) {
-        setOpen(true);
+        openList();
         return;
       }
       if (!visible.length) return;
@@ -118,10 +165,12 @@ export function Combobox({
           placeholder={placeholder}
           value={value}
           onChange={(event) => {
+            onQuery?.();
             onChange(event.target.value);
             setOpen(true);
           }}
-          onFocus={() => setOpen(true)}
+          onClick={openList}
+          onFocus={openList}
           onKeyDown={onKeyDown}
         />
         <button
@@ -130,7 +179,7 @@ export function Combobox({
           tabIndex={-1}
           aria-label={open ? "Hide options" : "Show options"}
           disabled={disabled}
-          onClick={() => setOpen((current) => !current)}
+          onClick={() => (open ? setOpen(false) : openList())}
         >
           <svg viewBox="0 0 20 20" aria-hidden="true" width="16" height="16">
             <path d="M5.5 8l4.5 4.5L14.5 8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -138,8 +187,23 @@ export function Combobox({
         </button>
       </div>
 
-      {open && (
-        <ul className="combo-list" id={listId} role="listbox" ref={list}>
+      {open && anchor && createPortal(
+        <ul
+          className={`combo-list${anchor.above ? " is-above" : ""}`}
+          id={listId}
+          role="listbox"
+          ref={list}
+          style={
+            {
+              left: anchor.left,
+              top: anchor.top,
+              width: anchor.width,
+              maxHeight: anchor.maxHeight,
+              // The entrance keyframe adds to this, so the flip and the motion coexist.
+              "--combo-shift": anchor.above ? "-100%" : "0px",
+            } as React.CSSProperties
+          }
+        >
           {visible.map((option, index) => (
             <li
               key={option.value}
@@ -166,7 +230,8 @@ export function Combobox({
             </li>
           ))}
           {!visible.length && <li className="combo-empty">{emptyText}</li>}
-        </ul>
+        </ul>,
+        document.body,
       )}
     </div>
   );

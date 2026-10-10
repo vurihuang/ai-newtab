@@ -32,9 +32,11 @@ normal automatic rebuild schedule still applies. The last good homepage remains
 available if generation or TSX validation fails.
 
 Connection settings are saved together, and the model list is read from
-`GET {baseUrl}/models` after every endpoint or key change (debounced), so the
-field offers real IDs while still accepting free text. Changing settings does not
-alter the connection captured by a running build.
+`GET {baseUrl}/models` on mount, after every endpoint or key change (debounced),
+when the picker is opened, and once a search pauses. Nothing about the list is
+persisted, so it matches `magpie models`; a saved ID that the list no longer contains
+is flagged rather than blocked, because free text is always allowed. Changing
+settings does not alter the connection captured by a running build.
 
 ## Layout
 
