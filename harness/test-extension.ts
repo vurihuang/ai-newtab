@@ -398,6 +398,21 @@ try {
   await setFixtureModels(["fixture/model", "fixture/custom"]);
   await fill("Model ID", "fixture/custom");
 
+  // ---- motion: the dialog springs in, and animates out before unmounting ----
+  const entrance = await page.evaluate<string>("getComputedStyle(document.querySelector('.settings-modal')).animationName");
+  check("the dialog enters with its own animation", entrance.includes("dialog-in"), entrance);
+  await click("Cancel");
+  const closingState = await page.evaluate<string>(
+    "document.querySelector('.settings-overlay')?.getAttribute('data-state') ?? 'gone'",
+  );
+  check("closing plays the exit before the dialog unmounts", closingState === "closed", closingState);
+  await waitUntil("!document.querySelector('.settings-modal')");
+  await click("⚙️ Settings");
+  // Boolean(): a returned DOM node cannot cross the CDP boundary, so the raw
+  // expression would read as undefined however present the dialog is.
+  await waitUntil("Boolean(document.querySelector('.settings-modal'))");
+  check("reopening mid-exit still shows the dialog", true);
+
   await click("Save");
   await waitUntil("!document.body.innerText.includes('Customize your homepage')");
   const savedSchedule = await page.evaluate<any>("chrome.storage.local.get('rebuildSchedule')");

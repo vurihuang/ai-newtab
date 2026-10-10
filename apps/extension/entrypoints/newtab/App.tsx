@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_GATEWAY_MODEL, DEFAULT_GATEWAY_URL, DEFAULT_BLOCKED_SITES } from "@homepage/agent-core";
 import { DEFAULT_REBUILD_SCHEDULE } from "@/lib/auto-rebuild";
 import { BUILD_STEPS } from "@/lib/protocol";
@@ -23,7 +23,9 @@ export default function App() {
   const [rebuildSchedule, setRebuildSchedule] = useState(DEFAULT_REBUILD_SCHEDULE);
   /** Transpiled homepage, ready for Sandpack. */
   const [renderedCode, setRenderedCode] = useState<string | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  /** Set while the dialog plays its exit; unmounting waits for it. */
+  const [settingsClosing, setSettingsClosing] = useState(false);
   /** Expand the full progress view over an existing homepage. */
   const [viewProgress, setViewProgress] = useState(false);
   /** The error the user dismissed, so a stale banner doesn't linger. */
@@ -63,6 +65,33 @@ export default function App() {
     setConfigured(true);
   }, []);
 
+  /** Pending unmount after the exit animation; cleared if the dialog reopens. */
+  const closingTimer = useRef<number | null>(null);
+
+  const closeSettings = useCallback(() => {
+    setSettingsClosing(true);
+    if (closingTimer.current !== null) window.clearTimeout(closingTimer.current);
+    closingTimer.current = window.setTimeout(() => {
+      closingTimer.current = null;
+      setSettingsOpen(false);
+      setSettingsClosing(false);
+    }, 140);
+  }, []);
+
+  const openSettings = useCallback(() => {
+    // Reopening mid-exit must not be undone by the pending close.
+    if (closingTimer.current !== null) {
+      window.clearTimeout(closingTimer.current);
+      closingTimer.current = null;
+    }
+    setSettingsClosing(false);
+    setSettingsOpen(true);
+  }, []);
+
+  useEffect(() => () => {
+    if (closingTimer.current !== null) window.clearTimeout(closingTimer.current);
+  }, []);
+
   const savePrompt = useCallback(
     async (prompt: string, sites: string[], next: ConnectionSettings, rebuild: boolean) => {
       const saved = await saveConnection(next);
@@ -70,10 +99,10 @@ export default function App() {
       setConnection(saved);
       setBlockedSites(sites);
       setSystemPrompt(prompt);
-      setShowSettings(false);
+      closeSettings();
       if (rebuild) build();
     },
-    [build],
+    [build, closeSettings],
   );
 
   // These persist immediately; the worker reads them on its next heartbeat or build.
@@ -86,10 +115,10 @@ export default function App() {
     await saveSetting("rebuildSchedule", next);
   }, []);
 
-  if (loading) return <div style={{ padding: 20, textAlign: "center" }}>Loading…</div>;
+  if (loading) return <div className="app-loading" style={{ padding: 20, textAlign: "center" }}>Loading…</div>;
   if (!configured) return <ApiKeySetup initialConnection={connection} onSave={saveKey} />;
 
-  const settingsModal = showSettings && (
+  const settingsModal = settingsOpen && (
     <SettingsModal
       initialPrompt={systemPrompt}
       blockedSites={blockedSites}
@@ -98,8 +127,9 @@ export default function App() {
       onToggleAutoRebuild={toggleAutoRebuild}
       rebuildSchedule={rebuildSchedule}
       onChangeSchedule={changeSchedule}
-      onClose={() => setShowSettings(false)}
+      onClose={closeSettings}
       onSave={savePrompt}
+      closing={settingsClosing}
     />
   );
 
@@ -126,10 +156,10 @@ export default function App() {
           <div style={{ ...errorBox, margin: "16px 0", padding: 12, borderRadius: 4 }}>{state.error}</div>
         )}
         <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
-          <button style={btn} onClick={() => build()}>
+          <button className="hb-btn hb-btn-primary" onClick={() => build()}>
             Build today&apos;s homepage
           </button>
-          <button style={btn} onClick={() => setShowSettings(true)}>⚙️ Settings</button>
+          <button className="hb-btn hb-btn-ghost" onClick={openSettings}>⚙️ Settings</button>
         </div>
         {settingsModal}
       </div>
@@ -145,7 +175,8 @@ export default function App() {
           // A build is running in the background (from here, another tab, or the
           // scheduled rebuild). Let the user watch it without losing this page.
           <button
-            style={{ ...btn, backgroundColor: "#0a7", display: "flex", alignItems: "center", gap: 8 }}
+            className="hb-btn"
+            style={{ backgroundColor: "#0a7", display: "flex", alignItems: "center", gap: 8, color: "white" }}
             onClick={() => setViewProgress(true)}
             title="View build progress"
           >
@@ -161,17 +192,18 @@ export default function App() {
             Building… {Math.min(state.stepIndex + 1, BUILD_STEPS.length)}/{BUILD_STEPS.length}
           </button>
         ) : (
-          <button style={btn} onClick={() => build()} title="Rebuild now">
+          <button className="hb-btn hb-btn-ghost" onClick={() => build()} title="Rebuild now">
             ↻ Rebuild
           </button>
         )}
-        <button style={btn} onClick={() => setShowSettings(true)} title="Customize homepage">
+        <button className="hb-btn hb-btn-ghost" onClick={openSettings} title="Customize homepage">
           ⚙️ Settings
         </button>
       </div>
 
       {showError && (
         <div
+          className="error-banner"
           style={{
             ...errorBox,
             position: "fixed",
@@ -189,10 +221,15 @@ export default function App() {
           <span style={{ flex: 1 }}>
             <b>Build failed.</b> {state.error}
           </span>
-          <button style={{ ...btn, padding: "4px 10px", backgroundColor: "#a02620" }} onClick={() => build()}>
+          <button
+            className="hb-btn"
+            style={{ padding: "4px 10px", backgroundColor: "#a02620", color: "white" }}
+            onClick={() => build()}
+          >
             Retry
           </button>
           <button
+            className="hb-icon-btn"
             onClick={() => setDismissedError(state.error)}
             style={{
               background: "transparent",

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { normalizeBlockList } from "@homepage/agent-core";
 import { validateConnection, type ConnectionSettings } from "@/lib/storage";
 import { ConnectionFields } from "./ConnectionFields";
-import { describeSchedule, isOffText, parseSchedule, PRESET_SCHEDULES } from "@/lib/auto-rebuild";
+import { DEFAULT_REBUILD_SCHEDULE, describeSchedule, isOffText, parseSchedule, PRESET_SCHEDULES } from "@/lib/auto-rebuild";
 import { Combobox } from "./Combobox";
 
 export function SettingsModal({
@@ -15,6 +15,7 @@ export function SettingsModal({
   onChangeSchedule,
   onClose,
   onSave,
+  closing = false,
 }: {
   initialPrompt: string;
   blockedSites: string[];
@@ -25,13 +26,17 @@ export function SettingsModal({
   onChangeSchedule: (next: string) => void;
   onClose: () => void;
   onSave: (prompt: string, blockedSites: string[], connection: ConnectionSettings, rebuild: boolean) => Promise<void>;
+  /** Animating out: the dialog stays mounted until the exit finishes. */
+  closing?: boolean;
 }) {
   const [draft, setDraft] = useState(initialPrompt);
   const [blockedDraft, setBlockedDraft] = useState(blockedSites.join("\n"));
   const [connectionDraft, setConnectionDraft] = useState(connection);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const schedule = parseSchedule(rebuildSchedule);
+  // Empty means "use the default": describing it as off would contradict the
+  // checkbox above it.
+  const schedule = parseSchedule(rebuildSchedule.trim() || DEFAULT_REBUILD_SCHEDULE);
   // "off" is a deliberate choice; only an unparseable value is a problem.
   const scheduleProblem = !isOffText(rebuildSchedule) && schedule.kind === "off"
     ? "Use a duration like 15m, 1h, 1d, or a five-field cron expression such as 0 9 * * *."
@@ -59,7 +64,11 @@ export function SettingsModal({
   };
 
   return (
-    <div className="settings-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div
+      className="settings-overlay"
+      data-state={closing ? "closed" : "open"}
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
       <div className="settings-modal" ref={dialog} role="dialog" aria-modal="true" aria-labelledby="settings-title" tabIndex={-1}>
         <header className="settings-header">
           <h2 id="settings-title">Customize your homepage</h2>

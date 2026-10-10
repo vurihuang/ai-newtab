@@ -23,7 +23,8 @@ export function HomepagePreview({ code }: { code: string }) {
   };
 
   return (
-    <SandpackProvider files={files} template="react" options={{ autorun: true }}>
+    <div className="homepage-preview" key={code}>
+      <SandpackProvider files={files} template="react" options={{ autorun: true }}>
       <SandpackLayout style={{ height: "100vh", width: "100vw" }}>
         {/* The preview's own toolbar is hidden: a new tab has nothing to reload
             or to open in CodeSandbox, and it covered the rendered homepage. */}
@@ -34,6 +35,7 @@ export function HomepagePreview({ code }: { code: string }) {
           showRestartButton={false}
         />
       </SandpackLayout>
-    </SandpackProvider>
+      </SandpackProvider>
+    </div>
   );
 }

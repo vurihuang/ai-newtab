@@ -1,3 +1,65 @@
+/* ---- Motion ----
+   Rules taken from the Product UI motion work on prompt-motion.com: springs
+   everywhere with a tiny overshoot at most, short fades on content swaps, no
+   glows, no bursts, and no dead time. Durations stay in one 120-240ms band. */
+:root {
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 240ms;
+  --ease-out: cubic-bezier(0.22, 0.68, 0.32, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes overlay-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+}
+@keyframes dialog-out {
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.99);
+  }
+}
+@keyframes section-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes check-pop {
+  from {
+    transform: scale(0.6);
+  }
+}
+@keyframes combo-list-in {
+  from {
+    transform: translateY(calc(var(--combo-shift, 0px) + 4px));
+  }
+}
+
 :root {
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -106,7 +168,7 @@ body {
 .build-step:last-child {
   padding-bottom: 0;
 }
-/* connective rail between markers */
+/* connective rail between markers; it fills as the step completes */
 .build-step::before {
   content: "";
   position: absolute;
@@ -114,13 +176,18 @@ body {
   top: 28px;
   bottom: 0;
   width: 2px;
-  background: var(--b-border);
+  background-color: var(--b-border);
+  background-image: linear-gradient(rgba(31, 157, 107, 0.5), rgba(31, 157, 107, 0.5));
+  background-repeat: no-repeat;
+  background-position: top;
+  background-size: 100% 0%;
+  transition: background-size var(--motion-slow) var(--ease-out);
 }
 .build-step:last-child::before {
   display: none;
 }
 .build-step.done::before {
-  background: rgba(31, 157, 107, 0.4);
+  background-size: 100% 100%;
 }
 
 .build-marker {
@@ -147,6 +214,7 @@ body {
   border-color: var(--b-success);
   background: var(--b-success);
   color: #fff;
+  animation: check-pop var(--motion-slow) var(--ease-spring);
 }
 
 .build-step-label {
@@ -259,7 +327,25 @@ body {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .build-step.active .build-marker {
+  .build-step.active .build-marker,
+  .build-step.done .build-marker,
+  .settings-modal,
+  .settings-section,
+  .combo-list {
+    animation: none;
+  }
+  .build-step::before {
+    transition: none;
+  }
+  .hb-btn:hover:not(:disabled),
+  .hb-btn:active:not(:disabled),
+  .hb-icon-btn:hover,
+  .hb-icon-btn:active {
+    transform: none;
+  }
+  .error-banner,
+  .app-loading,
+  .homepage-preview {
     animation: none;
   }
 }
@@ -287,7 +373,18 @@ body {
   color: var(--s-ink);
 }
 
+.settings-overlay {
+  animation: overlay-in var(--motion-base) var(--ease-out) both;
+}
+.settings-overlay[data-state="closed"] {
+  animation: overlay-out var(--motion-fast) var(--ease-out) both;
+}
+.settings-overlay[data-state="closed"] .settings-modal {
+  animation: dialog-out var(--motion-fast) var(--ease-out) both;
+}
+
 .settings-modal {
+  animation: dialog-in var(--motion-slow) var(--ease-spring) both;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -331,6 +428,17 @@ body {
 .settings-section {
   padding: 20px 0;
   border-bottom: 1px solid var(--s-border);
+  /* Content swaps with a short fade; the sections trail each other by one beat. */
+  animation: section-in var(--motion-slow) var(--ease-out) both;
+}
+.settings-section:nth-child(2) {
+  animation-delay: 24ms;
+}
+.settings-section:nth-child(3) {
+  animation-delay: 48ms;
+}
+.settings-section:nth-child(4) {
+  animation-delay: 72ms;
 }
 .settings-section:last-child {
   border-bottom: none;
@@ -431,6 +539,10 @@ body {
 }
 .field-status-error {
   color: #a02620;
+}
+/* A hint, not an error: free text is allowed, but the gateway no longer lists it. */
+.field-warn {
+  color: #8a5a00;
 }
 
 .settings-textarea:focus-visible,
@@ -562,9 +674,11 @@ body {
   color: var(--s-ink, #171b23);
 }
 /* Portaled to the body: the position and size come from the input's rect, so a
-   scrolling dialog cannot clip it and it can flip above the field. */
+   scrolling dialog cannot clip it and it can flip above the field. The flip
+   offset rides in a variable so the entrance animation can respect it. */
 .combo-list {
   transform: translateY(var(--combo-shift, 0));
+  animation: fade-in var(--motion-fast) var(--ease-out), combo-list-in var(--motion-fast) var(--ease-out) both;
   position: fixed;
   z-index: 1100;
   margin: 0;
@@ -626,7 +740,11 @@ body {
   border-radius: 10px;
   border: 1px solid transparent;
   cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+  transition:
+    background-color var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
   white-space: nowrap;
 }
 .hb-btn:disabled {
@@ -636,6 +754,12 @@ body {
 .hb-btn:focus-visible {
   outline: 2px solid var(--s-accent, #0066cc);
   outline-offset: 2px;
+}
+.hb-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.hb-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
 }
 .hb-btn-primary {
   background: var(--s-accent, #0066cc);
@@ -723,4 +847,29 @@ body {
     height: 100vh;
     border-radius: 0;
   }
+}
+
+/* ---- Remaining surfaces that used to appear without a transition ---- */
+.error-banner {
+  animation: banner-in var(--motion-base) var(--ease-out) both;
+}
+.app-loading {
+  animation: fade-in var(--motion-base) var(--ease-out) both;
+}
+/* A freshly built homepage fades in instead of popping over the old one. */
+.homepage-preview {
+  height: 100vh;
+  width: 100vw;
+  animation: fade-in var(--motion-slow) var(--ease-out) both;
+}
+.hb-icon-btn {
+  transition: opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
+  opacity: 0.75;
+}
+.hb-icon-btn:hover {
+  opacity: 1;
+  transform: scale(1.06);
+}
+.hb-icon-btn:active {
+  transform: scale(0.94);
 }
