@@ -1,48 +1,15 @@
 /**
- * Injected on demand by lib/scraper.ts (never auto-registered). Scrolls the page
- * to trigger lazy-loaded content, then returns its title and body HTML.
+ * Injected after the bridge waits for page load and dynamic content. Read the
+ * loaded DOM immediately: scrolling a long hidden tab with timers can take
+ * minutes under Chromium's background timer throttling.
  */
 export default defineContentScript({
   registration: "runtime",
   main() {
-    // Function to scroll the page
-    const scrollPage = async () => {
-      const scrollHeight = document.documentElement.scrollHeight;
-      const viewportHeight = window.innerHeight;
-      const scrollDistance = viewportHeight * 0.8; // Scroll 80% of viewport height each time
-      let currentPosition = 0;
-
-      // Scroll down the page in increments
-      while (currentPosition < scrollHeight) {
-        window.scrollTo(0, currentPosition);
-        currentPosition += scrollDistance;
-
-        // Wait for content to load (adjust delay as needed)
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      }
-
-      // Scroll to the very bottom
-      window.scrollTo(0, scrollHeight);
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Back to the top
-      window.scrollTo(0, 0);
-      await new Promise((resolve) => setTimeout(resolve, 200));
+    return {
+      url: location.href,
+      title: document.title,
+      html: document.body?.innerHTML ?? "",
     };
-
-    const convertPageToHTML = async () => {
-      // Scroll the page first to trigger lazy-loaded content
-      await scrollPage();
-
-      // Return raw HTML and title after scrolling
-      return {
-        url: location.href,
-        title: document.title,
-        html: document.body.innerHTML,
-      };
-    };
-
-    // executeScript resolves with this value
-    return convertPageToHTML();
   },
 });

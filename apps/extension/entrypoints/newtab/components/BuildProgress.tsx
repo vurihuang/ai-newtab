@@ -76,7 +76,7 @@ export function BuildProgress({
         <div className="build-panel">
           <div className="build-eyebrow">Agent</div>
           <div className="build-narration" ref={narrRef}>
-            {narration || "Warming up — reading what you’ve been browsing…"}
+            {narration || `${BUILD_STEPS[stepIndex]?.label ?? "Preparing your homepage"}${detail ? ` — ${detail}` : "…"}`}
           </div>
 
           {logs.length > 0 && (

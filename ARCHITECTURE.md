@@ -113,7 +113,7 @@ packages/agent-core/      host-agnostic agent loop — imports no chrome.*, brow
 apps/extension/           MV3 extension (WXT + React)
   entrypoints/
     background.ts         service worker: hosts BuildManager, alarm heartbeat
-    scraper.content.ts    injected into scraped tabs: scroll, return HTML
+    scraper.content.ts    injected into scraped tabs: immediately return loaded HTML
     newtab/               the new-tab UI (thin client onto the worker)
   lib/
     build-manager.ts      single-flight build host, broadcast, keepalive, reattach

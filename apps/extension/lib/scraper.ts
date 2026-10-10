@@ -97,6 +97,7 @@ async function scrapeUrl(
   windowId: number,
   opts: Required<ScrapeOptions>
 ): Promise<ScrapedPage | null> {
+  let tabId: number | undefined;
   try {
     // Create a new tab in the scraper window
     const tab = await browser.tabs.create({
@@ -105,12 +106,12 @@ async function scrapeUrl(
       windowId,
     });
 
+    tabId = tab.id;
     // Wait for the tab to load with timeout
     const loadComplete = await waitForTabLoad(tab.id!, opts.timeout);
 
     if (!loadComplete) {
       console.error(`Timeout waiting for ${url} to load`);
-      await browser.tabs.remove(tab.id!);
       return null;
     }
 
@@ -124,11 +125,17 @@ async function scrapeUrl(
 
     while (retryCount <= opts.maxRetries && !result) {
       try {
-        // Scrolls to trigger lazy content, then returns { title, html }.
-        const injectionResults = await browser.scripting.executeScript({
-          target: { tabId: tab.id! },
-          files: ["/content-scripts/scraper.js"],
-        });
+        // Bound extraction even when a renderer is frozen or unresponsive.
+        let deadline: ReturnType<typeof setTimeout> | undefined;
+        const injectionResults = await Promise.race([
+          browser.scripting.executeScript({
+            target: { tabId: tab.id! },
+            files: ["/content-scripts/scraper.js"],
+          }),
+          new Promise<never>((_, reject) => {
+            deadline = setTimeout(() => reject(new Error("Page extraction timed out")), 10_000);
+          }),
+        ]).finally(() => clearTimeout(deadline));
 
         if (
           injectionResults &&
@@ -144,6 +151,7 @@ async function scrapeUrl(
           }
         }
       } catch (error) {
+        if (error instanceof Error && error.message === "Page extraction timed out") return null;
         console.warn(`Attempt ${retryCount + 1} failed for ${url}:`, error);
 
         if (retryCount < opts.maxRetries) {
@@ -155,9 +163,6 @@ async function scrapeUrl(
 
       retryCount++;
     }
-
-    // Close the tab
-    await browser.tabs.remove(tab.id!);
 
     if (result) {
       return {
@@ -175,6 +180,8 @@ async function scrapeUrl(
   } catch (error) {
     console.error(`Failed to scrape ${url}:`, error);
     return null;
+  } finally {
+    if (tabId !== undefined) await browser.tabs.remove(tabId).catch(() => {});
   }
 }
 
@@ -242,5 +249,13 @@ async function waitForTabLoad(
     }, timeout);
 
     browser.tabs.onUpdated.addListener(listener);
+    // A cached page may finish before the listener is registered.
+    void browser.tabs.get(tabId).then((tab) => {
+      if (tab.status === "complete") listener(tabId, { status: "complete" });
+    }).catch(() => {
+      browser.tabs.onUpdated.removeListener(listener);
+      clearTimeout(timeoutId);
+      resolve(false);
+    });
   });
 }
