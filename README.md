@@ -1,4 +1,10 @@
-# AI Homepage
+# AI Homepage — Magpie / OpenAI-compatible fork
+
+This fork of [ThariqS/ai-newtab](https://github.com/ThariqS/ai-newtab) adds configurable
+OpenAI-compatible gateways and custom model IDs. **No Anthropic API key is needed
+in gateway mode.** The original Anthropic Managed Agents mode remains available.
+
+[中文 Magpie 安装与配置指南](docs/MAGPIE.zh-CN.md)
 
 **A new tab that reads the internet for you.**
 
@@ -14,23 +20,25 @@ A morning newspaper is just one look. You can describe any look and the next bui
 follows it: a quiet one-column digest, a dense dashboard, a green-on-black
 terminal, a zine.
 
-> **Privacy, up front.** To build your homepage, the extension sends a summary of
-> your browsing history (top domains, visit counts, a few page titles) and the
-> cleaned-up HTML of up to 8 pages to the Anthropic API, using your own API key.
-> Those pages are loaded in your signed-in browser, so they can include private
-> content. The agent session and every uploaded page are deleted when each build
-> ends. Your API key stays in the extension's local storage. More detail in
+> **Privacy, up front.** The extension sends a browsing-history summary and
+> cleaned page excerpts to your selected API and its upstream model provider.
+> Pages load in your signed-in browser and may contain private content. Gateway
+> mode sends at most 8 excerpts, capped at 24,000 characters each; its raw pages
+> stay in worker memory. Retention on the gateway/provider is governed by their
+> settings. Anthropic mode deletes its managed session and uploads after a build.
+> Your API key stays in the extension's local storage. See
 > [ARCHITECTURE.md](./ARCHITECTURE.md#privacy).
 
 ---
 
 ## Install
 
-You need Chrome (or another Chromium browser), [Node.js](https://nodejs.org) 20+,
-and an [Anthropic API key](https://console.anthropic.com).
+You need Chrome (or another Chromium browser such as Ego), [Node.js](https://nodejs.org) 20+,
+and either an OpenAI-compatible gateway with a text model or an
+[Anthropic API key](https://console.anthropic.com) with Managed Agents access.
 
 ```bash
-git clone https://github.com/ThariqS/ai-newtab.git
+git clone https://github.com/vurihuang/ai-newtab.git
 cd ai-newtab
 npx pnpm@10.11.1 install
 npx pnpm@10.11.1 build
@@ -48,11 +56,20 @@ If Chrome asks whether to keep the changed new-tab page, choose **Keep it**.
 
 ## Your first homepage
 
-1. Open a new tab and paste your Anthropic API key.
-2. Click **Build today's homepage**.
-3. Watch it work. The progress view walks through each step: preparing the
-   agent, reading your history, opening pages in your browser, analyzing them,
-   and writing your homepage.
+1. Open a new tab. Select **OpenAI-compatible gateway (Magpie)**.
+2. Enter the API Base URL (default `http://127.0.0.1:3425/v1`), your gateway key,
+   and a model ID. The key may be empty only for gateways without authentication.
+3. Click **Load models** to discover models, or enter any model ID manually.
+   Use the API's ID, such as `group/auto-deepseek-v4-1-flash` or `codex/gpt-6-astra`,
+   without a client-side `magpie/` prefix. Models must accept text via
+   `POST /chat/completions`; a Responses-only endpoint is not supported.
+4. Click **Save connection**, then **Build today's homepage**.
+5. Watch the progress view as it reads your history, chooses pages, reads them
+   in the browser and writes your homepage.
+
+Use the API port, not Magpie's web dashboard port. The Base URL is the API root,
+usually ending in `/v1`; do not append `/chat/completions` or `/models`.
+Settings are available before your first build and after a failed build.
 
 The first build takes a few minutes. You can close the tab while it runs, since
 the build lives in the extension's background worker and appears in any new tab
@@ -82,13 +99,12 @@ history summaries and URLs requested through `getPageHtml`. A page that redirect
 onto a blocked host is dropped before its content is uploaded. Local-network
 addresses (localhost, private IPs, `.local` and `.internal` hosts) are always blocked.
 
-**Model.** Choose which Claude model writes your page:
-
-- **Claude Sonnet 5.5** (default): the best balance of quality and cost.
-- **Claude Haiku 5.5**: the fastest and cheapest.
-- **Claude Opus 5.5**: the most careful editor, and the most expensive.
-
-The new model takes effect from your next build.
+**Model connection.** Change the provider, API Base URL, API key and model ID in
+Settings. **Load models** fills the model suggestions; manual IDs work even when
+`GET /models` is unavailable. **Save** applies settings to the next build;
+**Save & rebuild** starts a build immediately. An in-progress build keeps its
+original connection. Switching providers clears the key field so you can enter
+the credential for the new provider. Anthropic mode retains its Claude model picker.
 
 **Rebuild automatically.** On by default. Once your homepage is older than the
 interval you pick (6, 12, 24 or 48 hours), the extension rebuilds it quietly in the
@@ -99,20 +115,32 @@ failed build until the next interval, so it never loops.
 
 ## Good to know
 
-- **Cost.** Each build is a single agent session billed to your API key. What it
-  costs depends on the model and on how much it reads. Haiku is the cheapest
-  choice, and you can turn off automatic rebuilds to build only when you ask.
+- **Cost.** Gateway mode makes two text requests per successful build: page
+  selection and homepage generation. Your gateway's upstream billing applies.
+  Anthropic mode uses one Managed Agents session. Disable automatic rebuilds
+  if you prefer to trigger every build yourself.
 - **What it can see.** It ranks the sites in your history and opens up to 8 of
   them per build. It skips search engines, webmail, banking and logged-out
   marketing pages. Anything it can't open is reported, not hidden.
 - **Links are real.** Every link on the page comes from a page the agent actually
   read. It's told never to invent a URL.
-- **Interrupted builds.** If Chrome closes mid-build, the new tab offers
-  **Resume interrupted build** next time.
+- **Interrupted builds.** Closing a tab does not stop either mode. If the browser
+  or worker stops, gateway mode reports the interruption; click **Rebuild** to
+  start again. Anthropic mode can resume its managed session.
+- **Local gateway.** Magpie must be running during generation. Local addresses
+  are allowed for the API connection; they remain blocked as browsing sources.
 - **Updating.** After pulling new code, run `npx pnpm@10.11.1 build` again, then
   click the reload icon on the extension in `chrome://extensions`.
 
 ## How it works
+
+In **gateway mode**, the extension reads and filters your history, asks the model
+to choose up to 8 URLs from those domains, reads the pages in your browser, then
+sends bounded HTML excerpts to the model for a React component. Both model calls
+use streaming Chat Completions. There are no Managed Agents sessions or cloud
+file uploads. The worker validates TSX syntax before replacing the last homepage.
+
+In **Anthropic mode**, the original workflow is retained:
 
 1. **`getHistory`**: the agent gets a ranked summary of your most-visited domains.
 2. **`getPageHtml`**: it picks up to 8 pages, which the extension opens in a
@@ -121,7 +149,7 @@ failed build until the next interval, so it never loops.
    files inside its sandbox.
 4. **`write`**: it writes one React component, which the new tab renders.
 
-The extension's background worker drives a
+In Anthropic mode, the extension's background worker drives a
 [Claude Managed Agents](https://docs.claude.com) session directly, with no server
 in between. The two custom tools run in the extension because they need
 `chrome.history` and `chrome.tabs`. Everything else happens in the agent's
@@ -144,9 +172,10 @@ pnpm typecheck           # all packages
 pnpm test                # unit tests (no API calls; needs Bun)
 pnpm extension:test      # loads the built extension into headless Chrome (no API calls)
 
-cp .env.example .env     # add ANTHROPIC_API_KEY, then:
-pnpm agent:run           # a full build against the real API, with fixture history
-pnpm agent:verify        # check the output actually renders
+cp .env.example .env     # configure GATEWAY_* or ANTHROPIC_API_KEY, then:
+pnpm gateway:run         # real gateway + fixture history + public-page fetches
+pnpm agent:run           # original Anthropic Managed Agents build
+pnpm agent:verify        # check the last generated output renders
 ```
 
 ## Status

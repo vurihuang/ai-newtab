@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { MODEL_CHOICES, normalizeBlockList, type HomepageModel } from "@homepage/agent-core";
+import { normalizeBlockList } from "@homepage/agent-core";
+import { validateConnection, type ConnectionSettings } from "@/lib/storage";
+import { ConnectionFields } from "./ConnectionFields";
 import { REBUILD_INTERVAL_CHOICES } from "@/lib/auto-rebuild";
 import { btn } from "./ui";
 
 export function SettingsModal({
   initialPrompt,
   blockedSites,
-  model,
-  onChangeModel,
+  connection,
   autoRebuild,
   onToggleAutoRebuild,
   intervalHours,
@@ -17,17 +18,30 @@ export function SettingsModal({
 }: {
   initialPrompt: string;
   blockedSites: string[];
-  model: HomepageModel;
-  onChangeModel: (next: HomepageModel) => void;
+  connection: ConnectionSettings;
   autoRebuild: boolean;
   onToggleAutoRebuild: (next: boolean) => void;
   intervalHours: number;
   onChangeInterval: (next: number) => void;
   onClose: () => void;
-  onSave: (prompt: string, blockedSites: string[]) => void;
+  onSave: (prompt: string, blockedSites: string[], connection: ConnectionSettings, rebuild: boolean) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(initialPrompt);
   const [blockedDraft, setBlockedDraft] = useState(blockedSites.join("\n"));
+  const [connectionDraft, setConnectionDraft] = useState(connection);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const save = async (rebuild: boolean) => {
+    setSaving(true);
+    setError("");
+    try {
+      await onSave(draft, normalizeBlockList(blockedDraft.split("\n")), validateConnection(connectionDraft), rebuild);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div
@@ -71,22 +85,7 @@ export function SettingsModal({
         <p id="blocked-sites-help" style={{ color: "#888", fontSize: 12, margin: "6px 0 0" }}>
           One per line. Subdomains are included. Use *.example.com for wildcards.
         </p>
-        <label
-          style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16, color: "#333", fontSize: 14 }}
-        >
-          Model
-          <select
-            value={model}
-            onChange={(e) => onChangeModel(e.target.value as HomepageModel)}
-            style={{ padding: "4px 8px", fontSize: 14, borderRadius: 4, border: "1px solid #ddd" }}
-          >
-            {MODEL_CHOICES.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <ConnectionFields value={connectionDraft} onChange={setConnectionDraft} />
         <label
           style={{
             display: "flex",
@@ -134,6 +133,7 @@ export function SettingsModal({
           When on, the extension rebuilds in the background once your homepage is this old, so
           your next tab shows a fresh one (uses your API key).
         </p>
+        {error && <p role="alert" style={{ color: "#a02620" }}>{error}</p>}
         <div style={{ display: "flex", gap: 12, marginTop: 20, justifyContent: "flex-end" }}>
           <button
             onClick={onClose}
@@ -141,7 +141,8 @@ export function SettingsModal({
           >
             Cancel
           </button>
-          <button onClick={() => onSave(draft, normalizeBlockList(blockedDraft.split("\n")))} style={btn}>
+          <button disabled={saving} onClick={() => void save(false)} style={btn}>Save</button>
+          <button disabled={saving} onClick={() => void save(true)} style={btn}>
             Save &amp; rebuild
           </button>
         </div>

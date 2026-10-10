@@ -1,9 +1,11 @@
 import {
   DEFAULT_MODEL,
   DEFAULT_BLOCKED_SITES,
+  DEFAULT_GATEWAY_URL,
+  DEFAULT_GATEWAY_MODEL,
   MODEL_CHOICES,
+  normalizeGatewayUrl,
   STORAGE_KEYS as AGENT_KEYS,
-  type HomepageModel,
   type KVStore,
 } from "@homepage/agent-core";
 
@@ -19,6 +21,10 @@ export const KEYS = {
   systemPrompt: "systemPrompt",
   blockedSites: "blockedSites",
   model: "model",
+  provider: "provider",
+  baseUrl: "baseUrl",
+  connectionConfigured: "connectionConfigured",
+  gatewayBuildInProgress: "gatewayBuildInProgress",
   autoRebuild: "autoRebuild",
   /** ISO timestamp of the last auto-build *attempted* (success or not). */
   lastAutoBuildAttempt: "lastAutoBuildAttempt",
@@ -34,11 +40,17 @@ export interface Homepage {
   timestamp: string;
 }
 
-export interface Settings {
-  apiKey: string | null;
+export interface ConnectionSettings {
+  provider: "openai" | "anthropic";
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+}
+
+export interface Settings extends ConnectionSettings {
+  connectionConfigured: boolean;
   systemPrompt: string;
   blockedSites: string[];
-  model: HomepageModel;
   /** Unset means on — auto-rebuild is opt-out. */
   autoRebuild: boolean;
   rebuildIntervalHours: number | null;
@@ -64,16 +76,26 @@ export async function loadSettings(): Promise<Settings> {
     KEYS.systemPrompt,
     KEYS.blockedSites,
     KEYS.model,
+    KEYS.provider,
+    KEYS.baseUrl,
+    KEYS.connectionConfigured,
     KEYS.autoRebuild,
     KEYS.rebuildIntervalHours,
   ]);
   const model = s[KEYS.model] as string | undefined;
+  // Preserve pre-fork Anthropic installations; new installs start with Magpie.
+  const provider = s[KEYS.provider] === "anthropic" || (!s[KEYS.provider] && s[KEYS.apiKey])
+    ? "anthropic" : "openai";
   return {
-    apiKey: (s[KEYS.apiKey] as string | undefined) ?? null,
+    provider,
+    baseUrl: (s[KEYS.baseUrl] as string | undefined) ?? DEFAULT_GATEWAY_URL,
+    connectionConfigured: s[KEYS.connectionConfigured] === true || Boolean(s[KEYS.apiKey]),
+    apiKey: (s[KEYS.apiKey] as string | undefined) ?? "",
     systemPrompt: (s[KEYS.systemPrompt] as string | undefined) ?? "",
     blockedSites: (s[KEYS.blockedSites] as string[] | undefined) ?? [...DEFAULT_BLOCKED_SITES],
-    // Fall back if a stored model is no longer offered.
-    model: MODEL_CHOICES.find((m) => m.id === model)?.id ?? DEFAULT_MODEL,
+    model: provider === "openai"
+      ? model?.trim() || DEFAULT_GATEWAY_MODEL
+      : MODEL_CHOICES.find((m) => m.id === model)?.id ?? DEFAULT_MODEL,
     autoRebuild: s[KEYS.autoRebuild] !== false,
     rebuildIntervalHours: (s[KEYS.rebuildIntervalHours] as number | undefined) ?? null,
   };
@@ -84,6 +106,29 @@ export async function saveSetting<K extends "apiKey" | "systemPrompt" | "blocked
   value: Settings[K],
 ): Promise<void> {
   await browser.storage.local.set({ [KEYS[key]]: value });
+}
+
+export function validateConnection(connection: ConnectionSettings): ConnectionSettings {
+  const model = connection.model.trim();
+  if (!model) throw new Error("Enter a model ID.");
+  const apiKey = connection.apiKey.trim();
+  if (connection.provider === "anthropic") {
+    if (!apiKey) throw new Error("Enter your Anthropic API key.");
+    if (!MODEL_CHOICES.some((m) => m.id === model)) throw new Error("Choose a supported Anthropic model.");
+  }
+  return {
+    provider: connection.provider,
+    model,
+    apiKey,
+    baseUrl: connection.provider === "openai" ? normalizeGatewayUrl(connection.baseUrl) : connection.baseUrl,
+  };
+}
+
+export async function saveConnection(connection: ConnectionSettings): Promise<ConnectionSettings> {
+  const valid = validateConnection(connection);
+  // Save the destination, credential and model together, never a partial config.
+  await browser.storage.local.set({ ...valid, [KEYS.connectionConfigured]: true });
+  return valid;
 }
 
 export async function loadHomepage(): Promise<Homepage | undefined> {

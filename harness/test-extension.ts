@@ -5,10 +5,11 @@
  *   1. the MV3 service worker registers,
  *   2. the new-tab override renders (the API-key screen on a fresh profile),
  *   3. the worker answers `subscribe` on the build port with a snapshot,
- *   4. `startBuild` with no API key fails cleanly with an error message,
- *   5. `chrome.history` is readable, so the `history` permission is real.
+ *   4. unconfigured builds fail cleanly,
+ *   5. gateway settings and model discovery work through the UI,
+ *   6. a complete gateway build reads a fixture page and saves valid TSX.
  *
- * No API calls are made. Chrome 136+ ignores `--load-extension`, so the
+ * No external model API calls are made. Chrome 136+ ignores `--load-extension`, so the
  * extension is loaded over CDP's Extensions domain instead.
  *
  * Run: pnpm build && pnpm extension:test
@@ -22,7 +23,33 @@ import { join } from "node:path";
 const CHROME =
   process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const EXT = join(import.meta.dir, "../apps/extension/.output/chrome-mv3");
-const PORT = 9333;
+const PORT = Number(process.env.CHROME_DEBUG_PORT || 9333);
+let generationRequests = 0;
+let invalidCode = false;
+const fixtureCode = `import React from 'react'; export default function PersonalizedHomepage() { return <main><h1>Fixture homepage</h1><a href="https://news.example.com/story">A real fixture story</a></main>; }`;
+const fixture = Bun.serve({
+  port: 0,
+  async fetch(request): Promise<Response> {
+    const path = new URL(request.url).pathname;
+    if (path === "/v1/models") return Response.json({ data: [{ id: "fixture/model" }, { id: "fixture/custom" }] });
+    if (path === "/v1/chat/completions") {
+      if (request.headers.get("authorization") !== "Bearer fixture-key") return new Response(null, { status: 401 });
+      const body = await request.json() as any;
+      if (body.model !== "fixture/custom") return new Response(null, { status: 404 });
+      generationRequests++;
+      const selecting = body.messages[0].content.includes("Choose up to 8 URLs");
+      const content = selecting
+        ? JSON.stringify({ urls: [`http://news.example.com:${fixture.port}/`] })
+        : invalidCode ? "export default function PersonalizedHomepage() { return <main>" : fixtureCode;
+      return new Response(`data: ${JSON.stringify({ choices: [{ delta: { content }, finish_reason: "stop" }] })}\n\ndata: [DONE]\n\n`, {
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    }
+    return new Response('<html><head><title>Fixture news</title></head><body><main><h1>Fixture news</h1><a href="https://news.example.com/story">A real fixture story</a></main></body></html>', {
+      headers: { "Content-Type": "text/html" },
+    });
+  },
+});
 
 if (!existsSync(join(EXT, "manifest.json"))) {
   console.error(`No build at ${EXT}. Run: pnpm build`);
@@ -45,6 +72,8 @@ const chrome = spawn(
     "--disable-gpu",
     "--no-first-run",
     "--no-default-browser-check",
+    "--no-proxy-server",
+    "--host-resolver-rules=MAP news.example.com 127.0.0.1",
     "--enable-unsafe-extension-debugging", // required for the CDP Extensions domain
     `--remote-debugging-port=${PORT}`,
     `--user-data-dir=${profile}`,
@@ -151,8 +180,8 @@ try {
   await sleep(2500); // let React mount
   const bodyText = await page.evaluate<string>("document.body.innerText");
   check(
-    "renders the API-key setup screen",
-    /Connect your Anthropic API key/i.test(bodyText),
+    "renders the gateway connection screen",
+    /Connect your model/i.test(bodyText),
     bodyText.split("\n").filter(Boolean)[0]?.slice(0, 50),
   );
 
@@ -180,7 +209,7 @@ try {
   // ---- 4. startBuild without a key fails cleanly ----------------------------
   const started = await talk({ kind: "startBuild" }, 3000);
   const error = started.find((m) => m.kind === "error");
-  check("startBuild with no API key reports an error", /API key/i.test(error?.message ?? ""), error?.message);
+  check("unconfigured builds report a settings error", /model connection/i.test(error?.message ?? ""), error?.message);
 
   // ---- 5. chrome.history is readable ---------------------------------------
   const domains = await page.evaluate<string[]>(`
@@ -203,12 +232,80 @@ try {
     domains.join(", "),
   );
 
+  // ---- gateway setup and Settings, using the rendered React controls -------
+  const waitUntil = async (expression: string, timeout = 10_000) => {
+    const deadline = Date.now() + timeout;
+    while (Date.now() < deadline) {
+      if (await page.evaluate<boolean>(expression)) return;
+      await sleep(100);
+    }
+    throw new Error(`Timed out: ${expression}`);
+  };
+  const fill = async (label: string, value: string) => {
+    await page.evaluate(`(() => {
+      const label = [...document.querySelectorAll('label')].find(e => e.textContent.includes(${JSON.stringify(label)}));
+      const input = label?.querySelector('input');
+      if (!input) throw new Error('Input not found');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)});
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    })()`);
+  };
+  const click = (text: string) => page.evaluate(`(() => {
+    const button = [...document.querySelectorAll('button')].find(e => e.textContent.trim() === ${JSON.stringify(text)});
+    if (!button) throw new Error('Button not found');
+    button.click();
+  })()`);
+  await fill("API Base URL", `http://127.0.0.1:${fixture.port}/v1`);
+  await fill("Gateway API key", "fixture-key");
+  await click("Load models");
+  await waitUntil("document.querySelectorAll('#gateway-models option').length === 2");
+  check("model discovery works from the extension page", true);
+  await fill("Model ID", "fixture/model");
+  await click("Save connection");
+  await waitUntil("document.body.innerText.includes(\"Build today's homepage\")");
+  await click("⚙️ Settings");
+  await waitUntil("document.body.innerText.includes('Customize your homepage')");
+  await fill("Model ID", "fixture/custom");
+  await click("Save");
+  await waitUntil("!document.body.innerText.includes('Customize your homepage')");
+  const settingsSaved = await page.evaluate<boolean>(`(async () => {
+    const s = await chrome.storage.local.get(['provider', 'baseUrl', 'apiKey', 'model', 'connectionConfigured']);
+    return s.provider === 'openai' && s.model === 'fixture/custom' && s.apiKey === 'fixture-key' && s.connectionConfigured === true;
+  })()`);
+  check("custom gateway connection persists before the first build", settingsSaved);
+  await page.evaluate(`(async () => {
+    await chrome.storage.local.set({ autoRebuild: false });
+    await chrome.history.addUrl({url: 'http://news.example.com:${fixture.port}/'});
+    await chrome.history.addUrl({url: 'http://news.example.com:${fixture.port}/recent'});
+  })()`);
+  const build = () => page.evaluate<any>(`new Promise(resolve => {
+    const port = chrome.runtime.connect({ name: 'homepage-agent' });
+    const timer = setTimeout(() => { port.disconnect(); resolve({kind:'timeout'}); }, 45000);
+    port.onMessage.addListener(message => {
+      if (message.kind === 'done' || message.kind === 'error') {
+        clearTimeout(timer); port.disconnect(); resolve(message);
+      }
+    });
+    port.postMessage({ kind: 'startBuild' });
+    port.postMessage({ kind: 'startBuild' });
+  })`);
+  const built = await build();
+  check("gateway build reads a page and produces a homepage", built.kind === "done" && built.code === fixtureCode, built.message);
+  check("simultaneous build requests share one run", generationRequests === 2, `${generationRequests} model requests`);
+  const stored = await page.evaluate<any>("chrome.storage.local.get(['homepageData', 'gatewayBuildInProgress'])");
+  check("homepage saved and interruption marker cleared", stored.homepageData?.code === fixtureCode && !stored.gatewayBuildInProgress);
+  invalidCode = true;
+  const badBuild = await build();
+  const afterFailure = await page.evaluate<any>("chrome.storage.local.get('homepageData')");
+  check("invalid TSX fails without replacing the previous homepage", badBuild.kind === "error" && afterFailure.homepageData?.code === fixtureCode);
+
   page.close();
   browser.close();
 } catch (err) {
   console.error(`\n❌ ${err instanceof Error ? err.message : err}`);
   failures++;
 } finally {
+  fixture.stop(true);
   chrome.kill("SIGKILL");
   await sleep(300);
   rmSync(profile, { recursive: true, force: true });

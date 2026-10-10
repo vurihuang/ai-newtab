@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { runHomepageBuild, type RunPhase } from "@homepage/agent-core";
+import { runHomepageBuild, runGatewayBuild, type HomepageModel, type RunCallbacks, type RunPhase } from "@homepage/agent-core";
 import { rebuildIntervalMs, shouldAutoRebuild } from "./auto-rebuild";
 import { browserBridge } from "./browser-bridge";
 import {
@@ -10,7 +10,8 @@ import {
   type BuildState,
   type PageMsg,
 } from "./protocol";
-import { KEYS, extensionStore, loadHomepage, loadSettings, saveHomepage } from "./storage";
+import { KEYS, extensionStore, loadHomepage, loadSettings, saveHomepage, validateConnection } from "./storage";
+import { transform } from "sucrase";
 
 type Port = Parameters<Parameters<typeof browser.runtime.onConnect.addListener>[0]>[0];
 
@@ -95,8 +96,27 @@ export class BuildManager {
       return;
     }
 
+    // Chat Completions has no resumable server session. Surface an interrupted
+    // run once; do not turn a worker restart into an unbounded automatic retry.
+    const interruptedGateway = await extensionStore.get<boolean>(KEYS.gatewayBuildInProgress);
+    if (this.running) return; // A manual build may have started during the read.
+    if (interruptedGateway) {
+      this.running = true;
+      try {
+        await extensionStore.remove(KEYS.gatewayBuildInProgress);
+        const message = "The gateway build was interrupted. Click Rebuild to start again.";
+        this.state = { ...INITIAL_BUILD_STATE, phase: "error", error: message };
+        this.broadcast({ kind: "error", message });
+        await this.mirror(true);
+      } finally {
+        this.running = false;
+      }
+      return;
+    }
+
+    const settings = await loadSettings();
     const sessionId = await extensionStore.get<string>(KEYS.activeSessionId);
-    if (sessionId) {
+    if (sessionId && settings.provider === "anthropic") {
       void this.startBuild({ resume: true });
       return;
     }
@@ -116,7 +136,7 @@ export class BuildManager {
     if (
       !shouldAutoRebuild({
         enabled: settings.autoRebuild,
-        hasApiKey: Boolean(settings.apiKey),
+        hasApiKey: settings.connectionConfigured && (settings.provider === "openai" || Boolean(settings.apiKey)),
         isRunning: this.running,
         lastBuildTimestamp: homepage?.timestamp,
         lastAutoAttemptTimestamp: lastAttempt,
@@ -141,17 +161,7 @@ export class BuildManager {
       return; // single-flight: a second start just attaches.
     }
 
-    const { apiKey, systemPrompt, model } = await loadSettings();
-    if (!apiKey) {
-      // Manual builds are gated behind the key-setup screen and auto-builds
-      // require a key, so this only happens if the key was removed.
-      console.warn("[BuildManager] startBuild aborted — no API key in storage");
-      const message = "No Anthropic API key found. Add your key and try again.";
-      this.state = { ...INITIAL_BUILD_STATE, phase: "error", error: message };
-      this.broadcast({ kind: "error", message });
-      return;
-    }
-
+    // Acquire before the first await: two tabs may request a build together.
     this.running = true;
     this.controller = new AbortController();
     this.state = { ...INITIAL_BUILD_STATE, running: true, phase: "setup" };
@@ -160,31 +170,38 @@ export class BuildManager {
     console.log("[BuildManager] build started", { resume: Boolean(opts.resume) });
 
     try {
-      // The key is the user's own, read from local storage — there is no server
-      // to hide it behind. See ARCHITECTURE.md → Privacy.
-      const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-
-      const resumeSessionId = opts.resume
-        ? await extensionStore.get<string>(KEYS.activeSessionId)
-        : undefined;
-
-      const result = await runHomepageBuild({
-        client,
+      const settings = await loadSettings();
+      if (!settings.connectionConfigured) throw new Error("Configure your model connection in Settings before building.");
+      const connection = validateConnection(settings);
+      const callbacks: RunCallbacks = {
+        onPhase: (phase, detail) => this.onPhase(phase, detail),
+        onText: (chunk) => this.onText(chunk),
+        onLog: (line) => this.onLog(line),
+      };
+      const shared = {
         bridge: browserBridge,
-        store: extensionStore,
-        userSystemPrompt: systemPrompt,
+        userSystemPrompt: settings.systemPrompt,
         blockedSites: async () => (await loadSettings()).blockedSites,
-        model,
-        resumeSessionId,
         signal: this.controller.signal,
-        callbacks: {
-          onPhase: (phase, detail) => this.onPhase(phase, detail),
-          onText: (chunk) => this.onText(chunk),
-          onLog: (line) => this.onLog(line),
-        },
-      });
+        callbacks,
+      };
+      let result;
+      if (connection.provider === "openai") {
+        await extensionStore.set(KEYS.gatewayBuildInProgress, true);
+        result = await runGatewayBuild({ ...shared, config: connection });
+      } else {
+        const client = new Anthropic({ apiKey: connection.apiKey, dangerouslyAllowBrowser: true });
+        result = await runHomepageBuild({
+          ...shared,
+          client,
+          store: extensionStore,
+          model: connection.model as HomepageModel,
+          resumeSessionId: opts.resume ? await extensionStore.get<string>(KEYS.activeSessionId) : undefined,
+        });
+      }
 
-      // Persist the raw TSX; the page transpiles it for preview.
+      // Reject invalid TSX before replacing a previously working homepage.
+      transform(result.code, { transforms: ["typescript", "jsx"] });
       await saveHomepage(result.code);
 
       this.state = { ...this.state, running: false, phase: "done" };
@@ -199,9 +216,13 @@ export class BuildManager {
       this.notifyFailure(message);
       console.error("[BuildManager] build failed", error);
     } finally {
-      this.running = false;
-      this.controller = null;
-      this.stopKeepalive();
+      try {
+        await extensionStore.remove(KEYS.gatewayBuildInProgress);
+      } finally {
+        this.running = false;
+        this.controller = null;
+        this.stopKeepalive();
+      }
     }
   }
 

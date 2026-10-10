@@ -4,4 +4,5 @@ export * from "./history-digest";
 export * from "./prompt";
 export * from "./setup";
 export * from "./orchestrator";
+export * from "./gateway";
 export * from "./site-filter";

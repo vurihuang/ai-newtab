@@ -33,7 +33,7 @@ async function runTools(urls: string[], blockedSites?: string[] | (() => Promise
   ];
   async function* stream() { if (!resume) yield* events; }
   const client = { beta: {
-    agents: { retrieve: async () => ({}) },
+    agents: { retrieve: async () => ({ id: "cached", version: 1 }), update: async () => ({}) },
     environments: { retrieve: async () => ({}) },
     sessions: {
       create: async () => ({ id: "session" }),

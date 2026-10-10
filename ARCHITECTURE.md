@@ -1,6 +1,43 @@
 # Architecture
 
-There is no server. Three parties are involved, and you run one of them.
+## Gateway mode (default)
+
+`packages/agent-core/gateway.ts` uses an OpenAI-compatible API directly:
+
+1. Read the browser history, excluding blocked and local-network domains.
+2. Send its bounded digest to `POST {baseUrl}/chat/completions` to select pages.
+3. Validate the returned JSON, permit only history domains, deduplicate and cap
+   the selection at 8 pages. Read those pages through the existing browser bridge.
+4. Recheck exclusions and redirect destinations. Send at most 24,000 characters
+   of cleaned HTML per page in a second Chat Completions request.
+5. Collect streamed text, reject incomplete responses, and validate TSX syntax
+   in the worker before saving. The new-tab page renders in the existing Sandpack iframe.
+
+The model ID is a free-form string. `GET {baseUrl}/models` is optional discovery;
+manual model IDs do not depend on it. Both endpoints use the configured bearer
+key, if present. HTTP redirects are rejected. API roots can be localhost even
+though localhost remains prohibited as a scraped source.
+
+The extension owns orchestration; no Managed Agents, tool-calling API, cloud
+sandbox or remote file store is required. Raw excerpts stay in worker memory.
+The current pipeline does not progressively read large files: excerpts are
+truncated, so items below the limit may be omitted. Models must support text
+Chat Completions; Responses-only and Anthropic Messages-only gateways are not supported.
+
+The existing 20-second keepalive and streaming connection let a build survive
+closing its view. An interrupted worker cannot resume a gateway request. A
+persisted `gatewayBuildInProgress` marker surfaces that interruption on wake,
+then is cleared rather than repeatedly retrying. The user can rebuild, and the
+normal automatic rebuild schedule still applies. The last good homepage remains
+available if generation or TSX validation fails.
+
+Connection settings are saved together. New installations default to Magpie;
+existing installations with only an Anthropic key retain Anthropic mode.
+Changing settings does not alter the connection captured by a running build.
+
+## Anthropic Managed Agents mode
+
+The original mode remains available. Three parties are involved:
 
 | | Runs where | Does what |
 |---|---|---|
@@ -65,6 +102,7 @@ it runs sandboxed, not in the extension's own page.
 
 ```
 packages/agent-core/      host-agnostic agent loop — imports no chrome.*, browser.*, or node:*
+  gateway.ts              OpenAI-compatible client, model discovery, two-request build
   orchestrator.ts         runHomepageBuild: session lifecycle, event loop, tool dispatch, cleanup
   setup.ts                ensureAgent / ensureEnvironment (created once, cached by ID)
   prompt.ts               system prompt + per-build kickoff message
@@ -94,18 +132,21 @@ harness/                  Bun scripts: drive agent-core with a fixture/fetch bri
 
 | Command | Proves |
 |---|---|
-| `pnpm test` | The history digest is capped, ranked, drops `urls[]`, reports `totalSitesSeen` |
+| `pnpm test` | History, exclusions, gateway authentication, stream framing, cancellation, output failures and page limits |
+| `pnpm gateway:run` | Real gateway build against fixture history and public-page fetches |
 | `pnpm agent:run` | Full build against the real API: tools, mounting, sandbox grep/read, deliverable, cleanup |
 | `pnpm agent:verify` | The deliverable transforms, evaluates and server-renders |
 | `pnpm agent:resume-test` | A build killed with a tool call pending can be reattached and finished |
 | `pnpm agent:retention <sessionId>` | The session and every uploaded page body are actually deleted |
-| `pnpm extension:test` | In headless Chrome: worker registers, new tab renders, port protocol answers, `chrome.history` reads |
+| `pnpm extension:test` | Isolated headless Chrome: setup and Settings UI, model discovery, custom model persistence, real scraping of a local fixture, build concurrency and invalid TSX rejection |
 
-The `agent:*` commands need `ANTHROPIC_API_KEY` in `.env` and spend API credits. The
+`gateway:run` uses `GATEWAY_BASE_URL`, `GATEWAY_API_KEY` and `GATEWAY_MODEL` in `.env`.
+It spends the gateway's upstream credits. `agent:run`, `agent:resume-test` and
+`agent:retention` need `ANTHROPIC_API_KEY`; `agent:verify` is local. The
 harness's bridge uses fixture history and a plain `fetch`, so it can't see
 logged-in pages — that's the whole reason `getPageHtml` runs in your browser.
 
-## Gotchas worth knowing
+## Gotchas worth knowing (Anthropic mode)
 
 **`mount_path` is always re-rooted under `/mnt/session/uploads/`.** A leading `/` is
 stripped, not honored — both at session-create time and via `resources.add()`:
@@ -146,7 +187,12 @@ a blocked host is dropped: the browser still loads it, but nothing it read is
 sent. Loopback, private-IP and local-network hosts are always blocked, whatever
 the list says. Subresource loads are not intercepted.
 
-The session event log persists every domain, title and scraped page body server-side
+Gateway mode sends the digest and page excerpts to the configured gateway and
+its upstream model provider. The extension cannot delete their logs or promise
+zero retention. Generated code is stored locally; raw page excerpts are not
+persisted by the extension. The key is never included in model messages or logs.
+
+In Anthropic mode, the session event log persists every domain, title and scraped page body server-side
 until deleted, and uploaded files persist independently. `runHomepageBuild` deletes
 both in a `finally`. Confirm retention/ZDR eligibility against current docs before
 distributing this.
