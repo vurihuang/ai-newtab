@@ -7,13 +7,11 @@ itself. The Anthropic mode, its SDK and its configuration are gone: no Anthropic
 account is needed.
 
 > **For agents — paste this.**
-> Install this extension for me: clone `https://github.com/vurihuang/ai-newtab`, run
-> `npx pnpm@10.11.1 install && npx pnpm@10.11.1 build`, load
-> `apps/extension/.output/chrome-mv3` as an unpacked extension in my Chromium browser,
-> then read my local Magpie endpoint and API key (Pi keeps them in
-> `~/.pi/agent/models.json` under `providers.magpie`; otherwise use the link Magpie
-> prints when it starts) and fill them into the new tab's connection screen before
-> building one homepage.
+> Install this extension for me by following the **Install** steps in this README, then
+> connect it to my local Magpie gateway and pick a model: `magpie serve` prints the
+> endpoint and key, and `magpie models` lists what you can choose (on macOS without
+> the CLI on PATH, run `/Applications/magpie.app/Contents/MacOS/magpie` instead of
+> `magpie`).
 
 [中文 Magpie 安装与配置指南](docs/MAGPIE.zh-CN.md)
 

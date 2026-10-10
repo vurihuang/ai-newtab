@@ -3,7 +3,7 @@
 本 fork 只支持 OpenAI 兼容网关（默认本地 Magpie）。Anthropic Managed Agents 模式及其配置已移除，无需 Anthropic 账号。
 
 > **给 agent 的提示词（直接复制）**
-> 帮我安装这个项目：克隆 `https://github.com/vurihuang/ai-newtab`，执行 `npx pnpm@10.11.1 install && npx pnpm@10.11.1 build`，把 `apps/extension/.output/chrome-mv3` 作为「已解压的扩展程序」加载到我的 Chromium 浏览器，然后读取本机 Magpie 的 Endpoint 和 API key（Pi 存在 `~/.pi/agent/models.json` 的 `providers.magpie`；其他情况用 Magpie 启动时给出的链接），填入新标签页的连接设置并生成一次首页。
+> 按 README.md 的安装步骤帮我装好这个扩展，再接上本机 Magpie 并选好模型：`magpie serve` 会打印 Endpoint 和密钥，`magpie models` 列出可选的模型；macOS 上命令未配置到 PATH 时，用 `/Applications/magpie.app/Contents/MacOS/magpie` 代替 `magpie`。
 
 ## 与 Magpie 的集成
 
