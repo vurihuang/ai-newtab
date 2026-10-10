@@ -1,9 +1,19 @@
-# AI Homepage — Magpie / OpenAI-compatible fork
+# AI Homepage — Magpie edition
 
-This fork of [ThariqS/ai-newtab](https://github.com/ThariqS/ai-newtab) runs on any
-OpenAI-compatible gateway — [Magpie](https://github.com/vurihuang/magpie) by default —
-with a configurable endpoint, API key and model ID. The Anthropic mode, its SDK and
-its configuration have been removed; no Anthropic account is needed.
+This fork of [ThariqS/ai-newtab](https://github.com/ThariqS/ai-newtab) builds your new
+tab through a local **Magpie** gateway, or any other OpenAI-compatible API. The
+endpoint, key and model are yours to set, and the model list is read from the gateway
+itself. The Anthropic mode, its SDK and its configuration are gone: no Anthropic
+account is needed.
+
+> **For agents — paste this.**
+> Install this extension for me: clone `https://github.com/vurihuang/ai-newtab`, run
+> `npx pnpm@10.11.1 install && npx pnpm@10.11.1 build`, load
+> `apps/extension/.output/chrome-mv3` as an unpacked extension in my Chromium browser,
+> then read my local Magpie endpoint and API key (Pi keeps them in
+> `~/.pi/agent/models.json` under `providers.magpie`; otherwise use the link Magpie
+> prints when it starts) and fill them into the new tab's connection screen before
+> building one homepage.
 
 [中文 Magpie 安装与配置指南](docs/MAGPIE.zh-CN.md)
 
@@ -20,6 +30,26 @@ rebuilds itself in the background, so each new tab is up to date.
 A morning newspaper is just one look. You can describe any look and the next build
 follows it: a quiet one-column digest, a dense dashboard, a green-on-black
 terminal, a zine.
+
+## Magpie integration
+
+![The connection form with the model list read from a running Magpie gateway](docs/magpie-settings.png)
+<sub>The connection form. The model list comes from the gateway, with each ID grouped
+by where it is served (`codex`, `devin`, `ark`, …).</sub>
+
+Three fields, nothing else:
+
+1. **Endpoint** — `http://127.0.0.1:3425/v1` by default. Use the gateway's API port,
+   not its dashboard port, and stop at the `/v1` root.
+2. **API key** — the key Magpie prints next to the link it shows when it starts.
+   Leave it empty only for a gateway that requires no authentication.
+3. **Model** — read from `GET /models` as soon as the endpoint answers, and re-read
+   whenever the endpoint or key changes. Pick a row or type any ID the gateway
+   accepts.
+
+No cloud account, no server between the browser and the gateway, and the settings
+stay in the extension's local storage. The same three fields point at any other
+OpenAI-compatible API; models must accept text through `POST /chat/completions`.
 
 > **Privacy, up front.** The extension sends a browsing-history summary and
 > cleaned page excerpts to the endpoint you configure and its upstream model
@@ -56,22 +86,14 @@ If Chrome asks whether to keep the changed new-tab page, choose **Keep it**.
 
 ## Your first homepage
 
-1. Open a new tab. Enter the **Endpoint** (default `http://127.0.0.1:3425/v1`) and
-   your gateway **API key**. The key may be empty only for gateways without
-   authentication.
-2. Pick a **Model** from the list. The extension reads it from the gateway as soon
-   as the endpoint answers, so the dropdown shows real IDs, such as
-   `group/auto-deepseek-v4-1-flash`. Type any other model ID if you prefer — the
-   field accepts free text. Use the API's own ID, without a client-side
-   `magpie/` prefix. Models must accept text via `POST /chat/completions`;
-   a Responses-only endpoint is not supported.
-3. Click **Save connection**, then **Build today's homepage**.
-4. Watch the progress view as it reads your history, chooses pages, reads them
-   in the browser and writes your homepage.
+1. Open a new tab and fill in the three fields above: **Endpoint**, **API key** and
+   **Model**. The model list is already waiting — it is read from your gateway.
+2. Click **Save connection**, then **Build today's homepage**.
+3. Watch the progress view as it reads your history, chooses pages, reads them in
+   the browser and writes your homepage.
 
-Use the API port, not Magpie's web dashboard port. The Base URL is the API root,
-usually ending in `/v1`; do not append `/chat/completions` or `/models`.
-Settings are available before your first build and after a failed build.
+Settings are available before your first build, from the button on an existing
+homepage, and after a failed build — so nothing locks you out.
 
 The first build takes a few minutes. You can close the tab while it runs, since
 the build lives in the extension's background worker and appears in any new tab
